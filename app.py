@@ -1,8 +1,8 @@
 """
-🎙️ مساعد طبي صوتي - نسخة محسّنة
+🎙️ مساعد طبي صوتي - UI محسّن للموبايل والـ PC
 ✅ Edge TTS  → صوت عربي طبيعي مجاني (Microsoft)
 ✅ OpenRouter → ردود ذكية مجانية
-✅ UI فاتح وأنيق
+✅ Responsive UI - شغال على موبايل وPC
 """
 
 import os, sys, asyncio, tempfile, base64
@@ -12,7 +12,6 @@ import requests
 if os.name == "nt":
     sys.stdout.reconfigure(encoding="utf-8")
 
-# ── إعداد الصفحة ────────────────────────────────────────────
 st.set_page_config(
     page_title="مساعد طبي صوتي",
     page_icon="🩺",
@@ -21,114 +20,230 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
 
-* { font-family: 'Cairo', sans-serif !important; direction: rtl; }
-
-/* خلفية فاتحة */
-.stApp {
-    background: linear-gradient(160deg, #f0f4f8 0%, #e8f0fe 60%, #f5f5f5 100%);
+html, body, [class*="css"] {
+    font-family: 'Cairo', sans-serif !important;
 }
 
-/* بطاقة المحادثة */
-.chat-wrap {
+.stApp {
+    background: #f7f8fc;
+    direction: rtl;
+}
+
+/* ─── Header ─── */
+.app-header {
+    text-align: center;
+    padding: 28px 16px 12px;
+}
+.app-header .icon {
+    font-size: 52px;
+    line-height: 1;
+    display: block;
+    margin-bottom: 8px;
+}
+.app-header h1 {
+    font-size: clamp(22px, 5vw, 32px);
+    font-weight: 700;
+    color: #1a1a2e;
+    margin: 0 0 4px;
+}
+.app-header p {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+}
+
+/* ─── Chat container ─── */
+.chat-container {
     background: white;
     border-radius: 20px;
-    padding: 20px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-    margin-bottom: 16px;
-    min-height: 80px;
+    padding: clamp(12px, 3vw, 24px);
+    margin: 12px 0;
+    border: 1px solid #e5e7eb;
+    min-height: 120px;
+    max-height: 55vh;
+    overflow-y: auto;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    scroll-behavior: smooth;
 }
 
-/* رسالة المستخدم */
-.chat-user {
-    background: linear-gradient(135deg, #1a73e8, #4285f4);
-    color: white;
-    padding: 12px 18px;
-    border-radius: 18px 18px 4px 18px;
-    margin: 8px 0 8px auto;
-    max-width: 78%;
-    width: fit-content;
-    box-shadow: 0 3px 12px rgba(26,115,232,0.25);
-    font-size: 15px;
-    line-height: 1.7;
-    float: right;
-    clear: both;
-}
-
-/* رسالة الذكاء الاصطناعي */
-.chat-ai {
-    background: linear-gradient(135deg, #f8f9fa, #ffffff);
-    color: #1a1a2e;
-    border: 1.5px solid #e0e7ff;
-    padding: 12px 18px;
-    border-radius: 18px 18px 18px 4px;
-    margin: 8px auto 8px 0;
-    max-width: 82%;
-    width: fit-content;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
-    font-size: 15px;
-    line-height: 1.7;
-    float: left;
-    clear: both;
-}
-
-.clearfix { clear: both; margin-bottom: 2px; }
-
-/* بطاقة الحالة */
-.status-card {
-    background: white;
-    border: 1.5px solid #e0e7ff;
-    border-radius: 14px;
-    padding: 12px 20px;
+.empty-state {
     text-align: center;
-    color: #1a73e8;
-    font-size: 15px;
-    margin: 10px 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-/* معلومة */
-.info-box {
-    background: #e8f0fe;
-    border-right: 4px solid #1a73e8;
-    border-radius: 8px;
-    padding: 10px 14px;
-    color: #1a3c6e;
+    padding: 40px 20px;
+    color: #9ca3af;
     font-size: 14px;
-    margin: 8px 0;
+}
+.empty-state .empty-icon { font-size: 36px; margin-bottom: 8px; display: block; }
+
+/* ─── Messages ─── */
+.msg-row {
+    display: flex;
+    margin: 10px 0;
+    align-items: flex-end;
+    gap: 8px;
+}
+.msg-row.user  { flex-direction: row-reverse; }
+.msg-row.ai    { flex-direction: row; }
+
+.msg-avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+.msg-row.user  .msg-avatar { background: #dbeafe; }
+.msg-row.ai    .msg-avatar { background: #dcfce7; }
+
+.msg-bubble {
+    padding: 10px 16px;
+    border-radius: 18px;
+    max-width: min(75%, 460px);
+    font-size: clamp(13px, 3.5vw, 15px);
+    line-height: 1.7;
+    word-break: break-word;
+}
+.msg-row.user .msg-bubble {
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+.msg-row.ai .msg-bubble {
+    background: #f9fafb;
+    color: #1f2937;
+    border: 1px solid #e5e7eb;
+    border-bottom-left-radius: 4px;
 }
 
-/* الأزرار */
+/* ─── Status bar ─── */
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 50px;
+    font-size: 14px;
+    color: #374151;
+    margin: 10px auto;
+    width: fit-content;
+    max-width: 100%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+/* ─── Voice panel ─── */
+.voice-panel {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 16px;
+    margin: 12px 0;
+    text-align: center;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+
+/* ─── Input row ─── */
+.stForm > div { gap: 8px !important; }
+
+div[data-testid="stTextInput"] input {
+    border-radius: 50px !important;
+    border: 1.5px solid #d1d5db !important;
+    padding: 10px 20px !important;
+    font-family: 'Cairo', sans-serif !important;
+    font-size: 15px !important;
+    direction: rtl !important;
+    background: white !important;
+    color: #1f2937 !important;
+    transition: border-color 0.2s !important;
+}
+div[data-testid="stTextInput"] input:focus {
+    border-color: #3b82f6 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+}
+
 div[data-testid="stButton"] button {
     border-radius: 50px !important;
-    font-size: 16px !important;
-    font-weight: 700 !important;
     font-family: 'Cairo', sans-serif !important;
-    padding: 10px 24px !important;
-    transition: all 0.25s !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    padding: 10px 20px !important;
+    transition: all 0.2s !important;
+    border: 1.5px solid #d1d5db !important;
+}
+div[data-testid="stButton"] button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
 }
 
-/* عنوان */
-h1 { color: #1a1a2e !important; }
-p, label { color: #444 !important; }
+/* ─── Action buttons ─── */
+.action-row {
+    display: flex;
+    gap: 10px;
+    margin: 4px 0 12px;
+}
 
-/* input */
-input[type="text"] {
+/* ─── Audio player ─── */
+audio {
+    width: 100%;
+    border-radius: 12px;
+    margin-top: 8px;
+    height: 44px;
+}
+
+/* ─── Expander ─── */
+.streamlit-expanderHeader {
+    font-family: 'Cairo', sans-serif !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    background: white !important;
     border-radius: 12px !important;
-    border: 1.5px solid #c5cae9 !important;
-    font-family: 'Cairo', sans-serif !important;
+    border: 1px solid #e5e7eb !important;
 }
 
-/* divider */
-hr { border-color: #e0e0e0 !important; }
+/* ─── Footer ─── */
+.app-footer {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 12px;
+    padding: 16px 0 24px;
+    border-top: 1px solid #f3f4f6;
+    margin-top: 8px;
+}
+
+/* ─── Model badge ─── */
+.model-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 50px;
+    padding: 3px 12px;
+    font-size: 11px;
+    color: #15803d;
+    margin: 4px auto 12px;
+    font-family: monospace;
+}
+
+/* ─── Scrollbar ─── */
+.chat-container::-webkit-scrollbar { width: 4px; }
+.chat-container::-webkit-scrollbar-track { background: transparent; }
+.chat-container::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 4px;
+}
+.chat-container::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════
-# ── مفاتيح API ───────────────────────────────────────────
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════
+# API Keys
+# ══════════════════════════════════════════
 def get_openrouter_key() -> str:
     if st.session_state.get("manual_openrouter_key"):
         return st.session_state["manual_openrouter_key"]
@@ -138,15 +253,15 @@ def get_openrouter_key() -> str:
         return os.getenv("OPENROUTER_API_KEY", "")
 
 
-# ══════════════════════════════════════════════════════════
-# ── الموديلات ─────────────────────────────────────────────
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════
+# Models
+# ══════════════════════════════════════════
 OPENROUTER_MODELS = [
-    "openrouter/free",                          # ← router تلقائي دايماً شغال ✅
-    "deepseek/deepseek-chat-v3-0324:free",      # DeepSeek V3 - قوي ومجاني
-    "meta-llama/llama-3.3-70b-instruct:free",   # Llama 3.3 70B
-    "qwen/qwen3-8b:free",                       # Qwen3 - أحدث
-    "mistralai/mistral-small-3.1-24b-instruct:free", # Mistral Small 3.1
+    "openrouter/free",
+    "deepseek/deepseek-chat-v3-0324:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3-8b:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
 ]
 
 SYSTEM_PROMPT = (
@@ -162,16 +277,15 @@ SYSTEM_PROMPT = (
 )
 
 
-# ══════════════════════════════════════════════════════════
-# ── ردود OpenRouter ───────────────────────────────────────
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════
+# LLM
+# ══════════════════════════════════════════
 def get_response(text: str, history: list) -> str:
     api_key = get_openrouter_key()
     if not api_key:
         return "⚠️ لم يتم تعيين OPENROUTER_API_KEY."
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    # آخر 10 رسائل بس (لتجنب تجاوز token limit)
     messages += history[-10:]
     messages.append({"role": "user", "content": text})
 
@@ -190,12 +304,11 @@ def get_response(text: str, history: list) -> str:
                 timeout=30
             )
             if resp.status_code == 200:
-                data = resp.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                content = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
                 if content:
                     reply = content.strip()
-                    history.append({"role": "user",      "content": text})
-                    history.append({"role": "assistant",  "content": reply})
+                    history.append({"role": "user", "content": text})
+                    history.append({"role": "assistant", "content": reply})
                     st.session_state["active_model"] = model_name
                     return reply
             elif resp.status_code in [401, 403]:
@@ -203,54 +316,41 @@ def get_response(text: str, history: list) -> str:
             last_error = f"{model_name}: {resp.status_code}"
         except Exception as e:
             last_error = str(e)
-    return f"⚠️ كل الموديلات وصلت الحد المسموح.\n({last_error})"
+    return f"⚠️ كل الموديلات فشلت.\n({last_error})"
 
 
-# ══════════════════════════════════════════════════════════
-# ── Edge TTS (Microsoft) - مجاني وصوت عربي طبيعي ─────────
-# ══════════════════════════════════════════════════════════
-# الأصوات العربية المتاحة في Edge TTS:
-# ar-EG-ShakirNeural   → مصري رجالي ✅
-# ar-EG-SalmaNeural    → مصري نسائي
-# ar-SA-HamedNeural    → سعودي رجالي
-# ar-SA-ZariyahNeural  → سعودي نسائي
-
+# ══════════════════════════════════════════
+# TTS - Edge TTS
+# ══════════════════════════════════════════
 async def _edge_tts_async(text: str, voice: str) -> bytes:
     import edge_tts
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
         tmp_path = f.name
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(tmp_path)
-    with open(tmp_path, "rb") as f:
-        audio_bytes = f.read()
+    await edge_tts.Communicate(text, voice).save(tmp_path)
+    data = open(tmp_path, "rb").read()
     os.remove(tmp_path)
-    return audio_bytes
+    return data
 
 
 def text_to_audio_html(text: str) -> str:
     voice = st.session_state.get("tts_voice", "ar-EG-ShakirNeural")
     try:
-        # تشغيل asyncio بشكل آمن في Streamlit
         try:
             loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                raise RuntimeError
+            if loop.is_closed(): raise RuntimeError
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        
         audio_bytes = loop.run_until_complete(_edge_tts_async(text, voice))
         b64 = base64.b64encode(audio_bytes).decode()
         return (
-            '<audio autoplay controls style="width:100%;margin-top:10px;border-radius:10px;">'
-            f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
-            '</audio>'
+            '<audio autoplay controls style="width:100%;margin-top:10px;border-radius:12px;">'
+            f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
         )
     except ImportError:
-        st.warning("📦 edge-tts مش متنصب. شغّل: pip install edge-tts", icon="⚠️")
         return _gtts_fallback(text)
     except Exception as e:
-        st.warning(f"⚠️ Edge TTS: {e} — تم التحويل لـ gTTS")
+        st.warning(f"⚠️ Edge TTS: {e}")
         return _gtts_fallback(text)
 
 
@@ -260,174 +360,190 @@ def _gtts_fallback(text: str) -> str:
         tts = gTTS(text=text, lang="ar", slow=False)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             tts.save(f.name)
-            audio_bytes = open(f.name, "rb").read()
+            data = open(f.name, "rb").read()
         os.remove(f.name)
-        b64 = base64.b64encode(audio_bytes).decode()
+        b64 = base64.b64encode(data).decode()
         return (
-            '<audio autoplay controls style="width:100%;margin-top:10px;border-radius:10px;">'
-            f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
-            '</audio>'
+            '<audio autoplay controls style="width:100%;margin-top:10px;border-radius:12px;">'
+            f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
         )
     except Exception as e:
-        return f"<p style='color:red'>⚠️ مشكلة في الصوت: {e}</p>"
+        return f"<p style='color:red'>⚠️ خطأ في الصوت: {e}</p>"
 
 
-# ══════════════════════════════════════════════════════════
-# ── الواجهة ───────────────────────────────────────────────
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════
+# Session init
+# ══════════════════════════════════════════
+for k, v in [
+    ("messages",     []),
+    ("chat_history", []),
+    ("last_audio",   ""),
+    ("status",       "جاهز ✅"),
+    ("active_model", OPENROUTER_MODELS[0]),
+    ("tts_voice",    "ar-EG-ShakirNeural"),
+]:
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+
+# ══════════════════════════════════════════
+# UI — Header
+# ══════════════════════════════════════════
 st.markdown("""
-<div style='text-align:center; padding: 10px 0 4px 0'>
-  <span style='font-size:48px'>🩺</span>
-  <h1 style='margin:4px 0 0 0; font-size:28px; color:#1a1a2e'>مساعد طبي صوتي</h1>
-  <p style='color:#666; font-size:14px; margin:4px 0 0 0'>اسأل بصوتك أو اكتب سؤالك الطبي</p>
+<div class="app-header">
+  <span class="icon">🩺</span>
+  <h1>مساعد طبي صوتي</h1>
+  <p>اسأل بصوتك أو اكتب سؤالك الطبي</p>
 </div>
 """, unsafe_allow_html=True)
 
-# ── تهيئة الحالة ────────────────────────────────────────────
-for key, default in [
-    ("messages",      []),
-    ("chat_history",  []),
-    ("last_audio",    ""),
-    ("status",        "جاهز ✅"),
-    ("active_model",  OPENROUTER_MODELS[0]),
-    ("tts_voice",     "ar-EG-ShakirNeural"),
-]:
-    if key not in st.session_state:
-        st.session_state[key] = default
-
-# ── مؤشر الموديل ────────────────────────────────────────────
+mdl = st.session_state["active_model"].split("/")[-1].replace(":free", "")
 st.markdown(
-    f"<p style='text-align:center;color:#888;font-size:12px;margin:0'>⚡ {st.session_state['active_model']}</p>",
+    f'<div style="text-align:center"><span class="model-badge">⚡ {mdl}</span></div>',
     unsafe_allow_html=True
 )
 
-# ── المحادثة ─────────────────────────────────────────────────
-st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+# ── Chat ──────────────────────────────────
+st.markdown('<div class="chat-container" id="chat-box">', unsafe_allow_html=True)
+
 if not st.session_state.messages:
-    st.markdown(
-        "<p style='text-align:center;color:#aaa;font-size:14px;padding:20px 0'>ابدأ بسؤالك الطبي 👋</p>",
-        unsafe_allow_html=True
-    )
+    st.markdown("""
+    <div class="empty-state">
+      <span class="empty-icon">💬</span>
+      ابدأ بسؤالك الطبي وسأرد عليك فوراً
+    </div>
+    """, unsafe_allow_html=True)
+
 for msg in st.session_state.messages:
     if msg["role"] == "user":
-        st.markdown(f'<div class="chat-user">🧑 {msg["text"]}</div><div class="clearfix"></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="msg-row user">
+          <div class="msg-avatar">🧑</div>
+          <div class="msg-bubble">{msg["text"]}</div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="chat-ai">🩺 {msg["text"]}</div><div class="clearfix"></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="msg-row ai">
+          <div class="msg-avatar">🩺</div>
+          <div class="msg-bubble">{msg["text"]}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ── آخر رد صوتي ─────────────────────────────────────────────
+# ── Audio ─────────────────────────────────
 if st.session_state.last_audio:
     st.markdown(st.session_state.last_audio, unsafe_allow_html=True)
 
-# ── الحالة ───────────────────────────────────────────────────
-st.markdown(f'<div class="status-card">{st.session_state.status}</div>', unsafe_allow_html=True)
+# ── Status ────────────────────────────────
+st.markdown(
+    f'<div class="status-bar">{st.session_state.status}</div>',
+    unsafe_allow_html=True
+)
 
-# ══════════════════════════════════════════════════════════
-# ── الإدخال الصوتي (Web Speech API) ──────────────────────
-# ══════════════════════════════════════════════════════════
-st.markdown('<div class="info-box">💡 <b>الإدخال الصوتي:</b> اضغط ابدأ الكلام، اتكلم، وبعدين اضغط إرسال</div>', unsafe_allow_html=True)
-
+# ── Voice input panel ─────────────────────
 st.components.v1.html("""
-<div style="text-align:center; margin:14px 0; font-family:'Cairo',sans-serif;">
-  <button id="startBtn" onclick="startListening()"
-    style="background:linear-gradient(135deg,#1a73e8,#4285f4);color:white;
-           border:none;border-radius:50px;padding:13px 30px;font-size:16px;
-           font-family:'Cairo',sans-serif;font-weight:700;cursor:pointer;
-           box-shadow:0 4px 16px rgba(26,115,232,0.35);margin:4px;">
-    🎤 ابدأ الكلام
-  </button>
-  <button id="stopBtn" onclick="stopListening()" disabled
-    style="background:linear-gradient(135deg,#c62828,#e53935);color:white;
-           border:none;border-radius:50px;padding:13px 30px;font-size:16px;
-           font-family:'Cairo',sans-serif;font-weight:700;cursor:pointer;
-           box-shadow:0 4px 16px rgba(229,57,53,0.3);margin:4px;opacity:0.45;">
-    ⏹ وقف
-  </button>
-  <p id="statusTxt" style="color:#1a73e8;font-family:'Cairo',sans-serif;font-size:15px;margin-top:10px;">
-    اضغط "ابدأ الكلام"
+<div style="background:white;border:1px solid #e5e7eb;border-radius:16px;
+            padding:16px;text-align:center;font-family:'Cairo',sans-serif;
+            box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+
+  <p style="margin:0 0 12px;font-size:13px;color:#6b7280;direction:rtl">
+    🎤 اضغط الزر، اتكلم، ثم اضغط إرسال
   </p>
+
+  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <button id="startBtn" onclick="startListening()"
+      style="background:#1d4ed8;color:white;border:none;border-radius:50px;
+             padding:11px 26px;font-size:15px;font-family:'Cairo',sans-serif;
+             font-weight:600;cursor:pointer;transition:all .2s;min-width:130px">
+      🎤 ابدأ الكلام
+    </button>
+    <button id="stopBtn" onclick="stopListening()" disabled
+      style="background:#dc2626;color:white;border:none;border-radius:50px;
+             padding:11px 26px;font-size:15px;font-family:'Cairo',sans-serif;
+             font-weight:600;cursor:pointer;transition:all .2s;min-width:130px;opacity:.4">
+      ⏹ وقف
+    </button>
+  </div>
+
+  <p id="statusTxt"
+     style="color:#6b7280;font-size:13px;margin:10px 0 4px;font-family:'Cairo',sans-serif;">
+    اضغط ابدأ الكلام
+  </p>
+
   <div id="resultBox"
-    style="background:#f8f9fa;border:1.5px solid #c5cae9;border-radius:12px;
-           padding:12px;margin-top:10px;min-height:44px;color:#1a1a2e;
-           font-family:'Cairo',sans-serif;font-size:16px;text-align:right;
-           direction:rtl;display:none;">
+    style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;
+           padding:10px 14px;margin-top:8px;font-size:14px;color:#1f2937;
+           text-align:right;direction:rtl;min-height:40px;font-family:'Cairo',sans-serif">
   </div>
 </div>
+
 <script>
-let recognition = null, finalText = "";
+let rec=null, finalText="";
 
-function startListening() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { document.getElementById('statusTxt').textContent = '❌ استخدم Chrome أو Edge'; return; }
-    recognition = new SR();
-    recognition.lang = 'ar-EG';
-    recognition.continuous = false;
-    recognition.interimResults = true;
+function startListening(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){document.getElementById('statusTxt').textContent='❌ استخدم Chrome أو Edge';return;}
+  rec=new SR(); rec.lang='ar-EG'; rec.continuous=false; rec.interimResults=true;
+  setUI(true); finalText="";
+  document.getElementById('resultBox').style.display='block';
+  document.getElementById('resultBox').textContent='...';
+  document.getElementById('statusTxt').textContent='🎤 بسمعك، اتكلم!';
+  document.getElementById('statusTxt').style.color='#16a34a';
 
-    setButtons(true);
-    document.getElementById('statusTxt').textContent = '🎤 بسمعك... اتكلم!';
-    document.getElementById('statusTxt').style.color = '#2e7d32';
-    document.getElementById('resultBox').style.display = 'block';
-    document.getElementById('resultBox').textContent = '...';
-    finalText = "";
-
-    recognition.onresult = (e) => {
-        let interim = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-            if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
-            else interim += e.results[i][0].transcript;
-        }
-        document.getElementById('resultBox').textContent = finalText || interim;
-    };
-
-    recognition.onend = () => {
-        setButtons(false);
-        if (finalText.trim()) {
-            document.getElementById('statusTxt').textContent = '✅ اتسجل! اضغط إرسال';
-            document.getElementById('statusTxt').style.color = '#e65100';
-            const inp = window.parent.document.querySelector('input[aria-label="speech_result"]');
-            if (inp) {
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                nativeInputValueSetter.call(inp, finalText);
-                inp.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-        } else {
-            document.getElementById('statusTxt').textContent = '❌ مفيش كلام، جرب تاني';
-            document.getElementById('statusTxt').style.color = '#c62828';
-        }
-    };
-
-    recognition.onerror = (e) => {
-        setButtons(false);
-        document.getElementById('statusTxt').textContent = '❌ خطأ: ' + e.error;
-        document.getElementById('statusTxt').style.color = '#c62828';
-    };
-
-    recognition.start();
+  rec.onresult=e=>{
+    let interim="";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) finalText+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
+    }
+    document.getElementById('resultBox').textContent=finalText||interim;
+  };
+  rec.onend=()=>{
+    setUI(false);
+    if(finalText.trim()){
+      document.getElementById('statusTxt').textContent='✅ اتسجل! اضغط إرسال';
+      document.getElementById('statusTxt').style.color='#d97706';
+      const inp=window.parent.document.querySelector('input[aria-label="speech_result"]');
+      if(inp){
+        const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+        setter.call(inp,finalText);
+        inp.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    } else {
+      document.getElementById('statusTxt').textContent='❌ مفيش كلام، جرب تاني';
+      document.getElementById('statusTxt').style.color='#dc2626';
+    }
+  };
+  rec.onerror=e=>{
+    setUI(false);
+    document.getElementById('statusTxt').textContent='❌ خطأ: '+e.error;
+    document.getElementById('statusTxt').style.color='#dc2626';
+  };
+  rec.start();
 }
 
-function stopListening() { if (recognition) recognition.stop(); }
-
-function setButtons(recording) {
-    document.getElementById('startBtn').disabled = recording;
-    document.getElementById('startBtn').style.opacity = recording ? '0.45' : '1';
-    document.getElementById('stopBtn').disabled = !recording;
-    document.getElementById('stopBtn').style.opacity = recording ? '1' : '0.45';
+function stopListening(){if(rec)rec.stop();}
+function setUI(on){
+  const s=document.getElementById('startBtn'),p=document.getElementById('stopBtn');
+  s.disabled=on; s.style.opacity=on?'.4':'1';
+  p.disabled=!on; p.style.opacity=on?'1':'.4';
 }
 </script>
-""", height=210)
+""", height=200)
 
-# ── إدخال نصي + إرسال ──────────────────────────────────────
+# ── Text input ────────────────────────────
 with st.form("input_form", clear_on_submit=True):
-    col1, col2 = st.columns([4, 1])
-    with col1:
+    c1, c2 = st.columns([5, 1])
+    with c1:
         user_input = st.text_input(
             "speech_result",
-            placeholder="اكتب سؤالك هنا أو استخدم الميكروفون...",
+            placeholder="اكتب سؤالك أو استخدم الميكروفون...",
             label_visibility="collapsed"
         )
-    with col2:
-        submitted = st.form_submit_button("📤 إرسال", use_container_width=True)
+    with c2:
+        submitted = st.form_submit_button("📤", use_container_width=True)
 
 if submitted and user_input.strip():
     st.session_state.status = "🔄 جاري التفكير..."
@@ -439,57 +555,57 @@ if submitted and user_input.strip():
     st.session_state.status = "🔊 يتكلم..."
     st.rerun()
 
-# ── أزرار التحكم ────────────────────────────────────────────
+# ── Action buttons ────────────────────────
 st.divider()
-col1, col2 = st.columns(2)
-with col1:
+c1, c2 = st.columns(2)
+with c1:
     if st.button("🗑️ مسح المحادثة", use_container_width=True):
-        for k in ["messages", "chat_history", "last_audio"]:
-            st.session_state[k] = [] if k != "last_audio" else ""
-        st.session_state.status = "جاهز ✅"
+        st.session_state.messages     = []
+        st.session_state.chat_history = []
+        st.session_state.last_audio   = ""
+        st.session_state.status       = "جاهز ✅"
         st.rerun()
-with col2:
+with c2:
     if st.button("🔕 إيقاف الصوت", use_container_width=True):
         st.session_state.last_audio = ""
         st.rerun()
 
-# ── الإعدادات ───────────────────────────────────────────────
+# ── Settings ──────────────────────────────
 with st.expander("⚙️ الإعدادات"):
     st.markdown("#### 🔑 مفاتيح API")
-    manual_or = st.text_input("OpenRouter API Key", value=st.session_state.get("manual_openrouter_key", ""), type="password")
+    manual_or = st.text_input(
+        "OpenRouter API Key",
+        value=st.session_state.get("manual_openrouter_key", ""),
+        type="password"
+    )
     if manual_or:
         st.session_state["manual_openrouter_key"] = manual_or
 
-    ok = "✅ متصل" if get_openrouter_key() else "❌ مش متصل"
+    ok = "✅ متصل" if get_openrouter_key() else "❌ غير متصل"
     st.info(f"OpenRouter: {ok}")
     st.markdown("[🔑 احصل على مفتاح مجاني](https://openrouter.ai/keys)")
 
     st.markdown("---")
-    st.markdown("#### 🎙️ الصوت (Edge TTS - مجاني)")
-
+    st.markdown("#### 🎙️ اختيار الصوت")
     voice_options = {
-        "🇪🇬 مصري - شاكر (رجالي)":     "ar-EG-ShakirNeural",
-        "🇪🇬 مصري - سلمى (نسائي)":     "ar-EG-SalmaNeural",
-        "🇸🇦 سعودي - حامد (رجالي)":    "ar-SA-HamedNeural",
-        "🇸🇦 سعودية - ضارية (نسائي)":  "ar-SA-ZariyahNeural",
+        "🇪🇬 مصري - شاكر (رجالي)":    "ar-EG-ShakirNeural",
+        "🇪🇬 مصري - سلمى (نسائي)":    "ar-EG-SalmaNeural",
+        "🇸🇦 سعودي - حامد (رجالي)":   "ar-SA-HamedNeural",
+        "🇸🇦 سعودية - ضارية (نسائي)": "ar-SA-ZariyahNeural",
     }
-
-    selected = st.selectbox(
-        "اختار الصوت",
-        list(voice_options.keys()),
-        index=0
-    )
-    st.session_state["tts_voice"] = voice_options[selected]
-    st.success(f"✅ الصوت الحالي: {selected}")
+    sel = st.selectbox("الصوت", list(voice_options.keys()))
+    st.session_state["tts_voice"] = voice_options[sel]
+    st.success(f"✅ الصوت الحالي: {sel}")
 
     st.markdown("---")
     st.markdown("#### 🤖 الموديلات")
     for m in OPENROUTER_MODELS:
-        active = " ← **نشط الآن**" if m == st.session_state.get("active_model") else ""
+        active = " ← **نشط**" if m == st.session_state.get("active_model") else ""
         st.markdown(f"- `{m}`{active}")
 
+# ── Footer ────────────────────────────────
 st.markdown("""
-<div style='text-align:center;color:#aaa;font-size:12px;margin-top:16px'>
-⚕️ هذا المساعد للمعلومات العامة فقط • يُنصح دائماً بمراجعة الطبيب
+<div class="app-footer">
+  ⚕️ هذا المساعد للمعلومات العامة فقط &nbsp;•&nbsp; يُنصح دائماً بمراجعة الطبيب المختص
 </div>
 """, unsafe_allow_html=True)
