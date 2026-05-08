@@ -86,7 +86,7 @@ def load_model():
         api_key = os.getenv("GEMINI_API_KEY", "")
 
     if not api_key:
-        return None
+        api_key = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8" 
 
     genai.configure(api_key=api_key)
     return genai.GenerativeModel(
