@@ -406,11 +406,9 @@ with st.expander("⚙️ إعدادات"):
     st.markdown("---")
     st.markdown("#### 🎙️ اختار صوت ElevenLabs")
     voices = {
-        "Arabic Male (cgSgspJ2)": "cgSgspJ2msm6clMCkdW9",
-        "Adam":                   "pNInz6obpgDQGcFmaJgB",
-        "Aria":                   "9BWtsMINqrJLrRacOk9x",
-        "Custom Voice ID":        "custom"
-    }
+    "مصري (Karim)":   "IES4nrmZdUBHByLBde0P",
+    "Custom Voice ID": "custom"
+}
     selected_voice = st.selectbox("الصوت", list(voices.keys()))
     if selected_voice == "Custom Voice ID":
         custom_id = st.text_input("أدخل Voice ID")
