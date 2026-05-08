@@ -82,16 +82,21 @@ def get_openrouter_key() -> str:
     except Exception:
         return os.getenv("OPENROUTER_API_KEY", "")
 
-OPENROUTER_MODELS = [
-    "meta-llama/llama-3.3-8b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-]
 
 def get_elevenlabs_key() -> str:
     try:
         return st.secrets["ELEVENLABS_API_KEY"]
     except Exception:
         return os.getenv("ELEVENLABS_API_KEY", "")
+
+
+# ══════════════════════════════════════════════════════════
+# ── قائمة موديلات OpenRouter بالأولوية ───────────────────
+# ══════════════════════════════════════════════════════════
+OPENROUTER_MODELS = [
+    "meta-llama/llama-3.3-8b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+]
 
 
 # ══════════════════════════════════════════════════════════
@@ -109,19 +114,10 @@ SYSTEM_PROMPT = (
     "6. اطلب توضيحات إذا كانت الأعراض غير واضحة"
 )
 
-# ── قائمة موديلات Gemini بالأولوية (fallback تلقائي) ──────
-GEMINI_MODELS = [
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-8b",
-]
-
 
 # ══════════════════════════════════════════════════════════
-# ── رد Gemini مع fallback تلقائي للموديلات ───────────────
+# ── رد OpenRouter مع fallback تلقائي للموديلات ───────────
 # ══════════════════════════════════════════════════════════
-
 def get_response(text: str, history: list) -> str:
     api_key = get_openrouter_key()
     if not api_key:
@@ -153,6 +149,7 @@ def get_response(text: str, history: list) -> str:
             )
             if resp.status_code == 200:
                 reply = resp.json()["choices"][0]["message"]["content"].strip()
+                # ✅ نضيف للـ history بعد نجاح الـ response بس
                 history.append({"role": "user",      "content": text})
                 history.append({"role": "assistant",  "content": reply})
                 st.session_state["active_model"] = model_name
@@ -163,9 +160,10 @@ def get_response(text: str, history: list) -> str:
             else:
                 return f"❌ خطأ {resp.status_code}: {resp.text}"
         except Exception as e:
-            return f"❌ خطأ: {e}"
+            return f"❌ خطأ في الاتصال: {e}"
 
     return f"⚠️ كل الموديلات وصلت الحد المسموح.\n({last_error})"
+
 
 # ══════════════════════════════════════════════════════════
 # ── تحويل نص → صوت (ElevenLabs أو gTTS كـ fallback) ──────
@@ -194,7 +192,7 @@ def text_to_audio_html(text: str) -> str:
     if not xi_key:
         return _gtts_fallback(text)
 
-    voice_id = st.session_state.get("el_voice_id", "cgSgspJ2msm6clMCkdW9")
+    voice_id = st.session_state.get("el_voice_id", "IES4nrmZdUBHByLBde0P")
     try:
         resp = requests.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
@@ -232,14 +230,14 @@ def text_to_audio_html(text: str) -> str:
 st.markdown("<h1 style='text-align:center;color:white;margin-bottom:2px'>🩺 مساعد طبي صوتي</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;color:#78909c;font-size:14px'>اسأل بصوتك أو اكتب سؤالك الطبي</p>", unsafe_allow_html=True)
 
-# تهيئة الحالة
+# ── تهيئة الحالة ───────────────────────────────────────────
 for key, default in [
-    ("messages",       []),
-    ("chat_history", []),
-    ("last_audio",     ""),
-    ("status",         "جاهز ✅"),
-    ("active_model",   GEMINI_MODELS[0]),
-    ("el_voice_id",    "cgSgspJ2msm6clMCkdW9"),
+    ("messages",      []),
+    ("chat_history",  []),
+    ("last_audio",    ""),
+    ("status",        "جاهز ✅"),
+    ("active_model",  OPENROUTER_MODELS[0]),   # ✅ صح
+    ("el_voice_id",   "IES4nrmZdUBHByLBde0P"), # ✅ متطابق مع القائمة
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -398,10 +396,10 @@ st.divider()
 col1, col2 = st.columns(2)
 with col1:
     if st.button("🗑️ مسح المحادثة", use_container_width=True):
-        st.session_state.messages       = []
-        st.session_state.chat_history = []
-        st.session_state.last_audio     = ""
-        st.session_state.status         = "جاهز ✅"
+        st.session_state.messages      = []
+        st.session_state.chat_history  = []
+        st.session_state.last_audio    = ""
+        st.session_state.status        = "جاهز ✅"
         st.rerun()
 with col2:
     if st.button("🔕 إيقاف الصوت", use_container_width=True):
@@ -412,15 +410,15 @@ with col2:
 with st.expander("⚙️ إعدادات"):
     st.markdown("#### 🔑 API Keys — أضفها في Streamlit Secrets")
     st.code(
-        'GEMINI_API_KEY = "مفتاحك_هنا"\nELEVENLABS_API_KEY = "مفتاحك_هنا"',
+        'OPENROUTER_API_KEY = "مفتاحك_هنا"\nELEVENLABS_API_KEY = "مفتاحك_هنا"',
         language="toml"
     )
+
     col_a, col_b = st.columns(2)
     with col_a:
-        st.markdown("[🔑 Gemini Key مجاني](https://aistudio.google.com/app/apikey)")
+        st.markdown("[🔑 OpenRouter Key مجاني](https://openrouter.ai/keys)")
         openrouter_ok = "✅ متصل" if get_openrouter_key() else "❌ مش متصل"
         st.info(f"OpenRouter: {openrouter_ok}")
-        st.info(f"Gemini: {openrouter_ok}")
     with col_b:
         st.markdown("[🎙️ ElevenLabs Key](https://elevenlabs.io/app/settings/api-keys)")
         xi_ok = "✅ متصل" if get_elevenlabs_key() else "⚠️ gTTS (احتياطي)"
@@ -429,9 +427,9 @@ with st.expander("⚙️ إعدادات"):
     st.markdown("---")
     st.markdown("#### 🎙️ اختار صوت ElevenLabs")
     voices = {
-    "مصري (Karim)":   "IES4nrmZdUBHByLBde0P",
-    "Custom Voice ID": "custom"
-}
+        "مصري (Karim)":   "IES4nrmZdUBHByLBde0P",
+        "Custom Voice ID": "custom"
+    }
     selected_voice = st.selectbox("الصوت", list(voices.keys()))
     if selected_voice == "Custom Voice ID":
         custom_id = st.text_input("أدخل Voice ID")
@@ -442,6 +440,6 @@ with st.expander("⚙️ إعدادات"):
 
     st.markdown("---")
     st.markdown("#### 🤖 الموديلات المتاحة (fallback تلقائي)")
-    for m in GEMINI_MODELS:
+    for m in OPENROUTER_MODELS:   # ✅ OpenRouter مش Gemini
         active = "← **نشط الآن**" if m == st.session_state.get("active_model") else ""
         st.markdown(f"- `{m}` {active}")
