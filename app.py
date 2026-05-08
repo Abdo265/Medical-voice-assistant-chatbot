@@ -172,11 +172,14 @@ for i, msg in enumerate(st.session_state.messages):
     else:
         st.markdown(f'<div class="chat-ai">🩺 {msg["text"]}</div><div class="clearfix"></div>', unsafe_allow_html=True)
         if msg.get("audio"):
-            # استخدام مكون الصوت الرسمي من Streamlit لضمان التوافق
-            st.audio(f"data:audio/mp3;base64,{msg['audio']}", format="audio/mp3", autoplay=(i == len(st.session_state.messages)-1))
-            # إضافة زر إعادة تشغيل يدوي إذا لزم الأمر
-            if st.button(f"▶️ إعادة تشغيل الصوت", key=f"play_{i}"):
-                st.audio(f"data:audio/mp3;base64,{msg['audio']}", format="audio/mp3", autoplay=True)
+            # التشغيل التلقائي فقط لآخر رسالة تم استلامها
+            is_latest = (i == len(st.session_state.messages) - 1)
+            st.audio(
+                f"data:audio/mp3;base64,{msg['audio']}", 
+                format="audio/mp3", 
+                key=f"audio_{i}",
+                autoplay=is_latest
+            )
 
 # الإدخال
 with st.form("input_form", clear_on_submit=True):
@@ -198,4 +201,5 @@ with st.expander("⚙️ الإعدادات"):
     if st.button("🗑️ مسح المحادثة"):
         st.session_state.messages = []
         st.session_state.chat_history = []
+        st.session_state["active_model"] = OPENROUTER_MODELS[0]
         st.rerun()
