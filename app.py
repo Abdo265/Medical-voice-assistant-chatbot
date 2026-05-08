@@ -8,7 +8,6 @@ import sys
 import tempfile
 import base64
 import streamlit as st
-import google.generativeai as genai
 import requests
 
 if os.name == "nt":
@@ -77,11 +76,18 @@ div[data-testid="stButton"] button {
 # ══════════════════════════════════════════════════════════
 # ── مفاتيح API (من Secrets فقط - لا تُكتب في الكود) ──────
 # ══════════════════════════════════════════════════════════
-def get_gemini_key() -> str:
+def get_openrouter_key() -> str:
     try:
-        return st.secrets["GEMINI_API_KEY"]
+        return st.secrets["OPENROUTER_API_KEY"]
     except Exception:
-        return os.getenv("GEMINI_API_KEY", "")
+        return os.getenv("OPENROUTER_API_KEY", "")
+
+OPENROUTER_MODELS = [
+    "google/gemini-2.0-flash-exp:free",
+    "google/gemini-flash-1.5:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+]
 
 def get_elevenlabs_key() -> str:
     try:
@@ -117,33 +123,51 @@ GEMINI_MODELS = [
 # ══════════════════════════════════════════════════════════
 # ── رد Gemini مع fallback تلقائي للموديلات ───────────────
 # ══════════════════════════════════════════════════════════
+
 def get_response(text: str, history: list) -> str:
-    api_key = get_gemini_key()
+    api_key = get_openrouter_key()
     if not api_key:
-        return "⚠️ لم يتم تعيين GEMINI_API_KEY في إعدادات Streamlit Secrets."
+        return "⚠️ لم يتم تعيين OPENROUTER_API_KEY في إعدادات Streamlit Secrets."
+
+    # بناء تاريخ المحادثة
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for msg in history:
+        messages.append(msg)
+    messages.append({"role": "user", "content": text})
 
     last_error = ""
-    for model_name in GEMINI_MODELS:
+    for model_name in OPENROUTER_MODELS:
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name, system_instruction=SYSTEM_PROMPT)
-            chat = model.start_chat(history=history)
-            resp = chat.send_message(text)
-            reply = resp.text.strip()
-            history.append({"role": "user",  "parts": [text]})
-            history.append({"role": "model", "parts": [reply]})
-            st.session_state["active_model"] = model_name   # نحفظ الموديل النشط
-            return reply
-        except Exception as e:
-            err = str(e)
-            if any(x in err for x in ["429", "quota", "rate", "RESOURCE_EXHAUSTED"]):
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://medical-assistant.streamlit.app",
+                    "X-Title": "Medical Assistant"
+                },
+                json={
+                    "model": model_name,
+                    "messages": messages,
+                    "max_tokens": 1000,
+                },
+                timeout=30
+            )
+            if resp.status_code == 200:
+                reply = resp.json()["choices"][0]["message"]["content"].strip()
+                history.append({"role": "user",      "content": text})
+                history.append({"role": "assistant",  "content": reply})
+                st.session_state["active_model"] = model_name
+                return reply
+            elif resp.status_code in [429, 503]:
                 last_error = f"{model_name}: وصل الحد المسموح"
-                continue   # جرّب الموديل التالي
+                continue
             else:
-                return f"❌ خطأ: {e}"
+                return f"❌ خطأ {resp.status_code}: {resp.text}"
+        except Exception as e:
+            return f"❌ خطأ: {e}"
 
-    return f"⚠️ كل الموديلات وصلت الحد المسموح. انتظر دقيقة وحاول تاني.\n({last_error})"
-
+    return f"⚠️ كل الموديلات وصلت الحد المسموح.\n({last_error})"
 
 # ══════════════════════════════════════════════════════════
 # ── تحويل نص → صوت (ElevenLabs أو gTTS كـ fallback) ──────
@@ -213,7 +237,7 @@ st.markdown("<p style='text-align:center;color:#78909c;font-size:14px'>اسأل 
 # تهيئة الحالة
 for key, default in [
     ("messages",       []),
-    ("gemini_history", []),
+    ("chat_history", []),
     ("last_audio",     ""),
     ("status",         "جاهز ✅"),
     ("active_model",   GEMINI_MODELS[0]),
@@ -364,7 +388,7 @@ if submitted and user_input.strip():
     st.session_state.messages.append({"role": "user", "text": user_input.strip()})
 
     with st.spinner("🩺 جاري الرد..."):
-        reply = get_response(user_input.strip(), st.session_state.gemini_history)
+        reply = get_response(user_input.strip(), st.session_state.chat_history)
 
     st.session_state.messages.append({"role": "ai", "text": reply})
     st.session_state.last_audio = text_to_audio_html(reply)
@@ -377,7 +401,7 @@ col1, col2 = st.columns(2)
 with col1:
     if st.button("🗑️ مسح المحادثة", use_container_width=True):
         st.session_state.messages       = []
-        st.session_state.gemini_history = []
+        st.session_state.chat_history = []
         st.session_state.last_audio     = ""
         st.session_state.status         = "جاهز ✅"
         st.rerun()
@@ -396,7 +420,8 @@ with st.expander("⚙️ إعدادات"):
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("[🔑 Gemini Key مجاني](https://aistudio.google.com/app/apikey)")
-        gemini_ok = "✅ متصل" if get_gemini_key() else "❌ مش متصل"
+        openrouter_ok = "✅ متصل" if get_openrouter_key() else "❌ مش متصل"
+        st.info(f"OpenRouter: {openrouter_ok}")
         st.info(f"Gemini: {gemini_ok}")
     with col_b:
         st.markdown("[🎙️ ElevenLabs Key](https://elevenlabs.io/app/settings/api-keys)")
