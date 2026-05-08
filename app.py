@@ -422,7 +422,7 @@ with st.expander("⚙️ إعدادات"):
         st.markdown("[🔑 Gemini Key مجاني](https://aistudio.google.com/app/apikey)")
         openrouter_ok = "✅ متصل" if get_openrouter_key() else "❌ مش متصل"
         st.info(f"OpenRouter: {openrouter_ok}")
-        st.info(f"Gemini: {gemini_ok}")
+        st.info(f"Gemini: {openrouter_ok}")
     with col_b:
         st.markdown("[🎙️ ElevenLabs Key](https://elevenlabs.io/app/settings/api-keys)")
         xi_ok = "✅ متصل" if get_elevenlabs_key() else "⚠️ gTTS (احتياطي)"
