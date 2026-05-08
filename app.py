@@ -1,6 +1,5 @@
 """
-🎙️ مساعد صوتي طبي - يشتغل على Streamlit Cloud
-بدون pyaudio أو pygame - الصوت بيشتغل في المتصفح
+🎙️ مساعد طبي صوتي - نسخة مصلحة وشاملة
 """
 
 import os
@@ -20,6 +19,7 @@ st.set_page_config(
     layout="centered"
 )
 
+# ── CSS محسن ──────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
@@ -34,7 +34,6 @@ st.markdown("""
     margin: 6px 0; max-width: 80%;
     float: right; clear: both;
     box-shadow: 0 4px 15px rgba(46,204,113,0.25);
-    font-size: 15px; line-height: 1.6;
 }
 .chat-ai {
     background: linear-gradient(135deg, #1a3a5c, #2980b9);
@@ -43,7 +42,6 @@ st.markdown("""
     margin: 6px 0; max-width: 85%;
     float: left; clear: both;
     box-shadow: 0 4px 15px rgba(41,128,185,0.25);
-    font-size: 15px; line-height: 1.6;
 }
 .clearfix { clear: both; margin-bottom: 4px; }
 
@@ -54,85 +52,39 @@ st.markdown("""
     text-align: center; color: #90caf9;
     font-size: 16px; margin: 12px 0;
 }
-
-.info-box {
-    background: rgba(52, 152, 219, 0.12);
-    border-right: 4px solid #3498db;
-    border-radius: 8px; padding: 12px 16px;
-    color: #a8d8f0; font-size: 14px; margin: 8px 0;
-}
-
-div[data-testid="stButton"] button {
-    border-radius: 50px !important;
-    font-size: 17px !important; font-weight: 700 !important;
-    font-family: 'Cairo', sans-serif !important;
-    padding: 12px 28px !important;
-    transition: all 0.3s !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
-
-# ══════════════════════════════════════════════════════════
-# ── مفاتيح API (من Secrets فقط - لا تُكتب في الكود) ──────
-# ══════════════════════════════════════════════════════════
+# ── إدارة المفاتيح ──────────────────────────────────────────
 def get_openrouter_key() -> str:
-    # الأولوية: 1. المدخل يدوياً في الجلسة، 2. Secrets، 3. متغيرات البيئة
-    if "manual_openrouter_key" in st.session_state and st.session_state["manual_openrouter_key"]:
+    if st.session_state.get("manual_openrouter_key"):
         return st.session_state["manual_openrouter_key"]
-    try:
-        return st.secrets["OPENROUTER_API_KEY"]
-    except Exception:
-        return os.getenv("OPENROUTER_API_KEY", "")
-
+    try: return st.secrets["OPENROUTER_API_KEY"]
+    except: return os.getenv("OPENROUTER_API_KEY", "")
 
 def get_elevenlabs_key() -> str:
-    if "manual_elevenlabs_key" in st.session_state and st.session_state["manual_elevenlabs_key"]:
+    if st.session_state.get("manual_elevenlabs_key"):
         return st.session_state["manual_elevenlabs_key"]
-    try:
-        return st.secrets["ELEVENLABS_API_KEY"]
-    except Exception:
-        return os.getenv("ELEVENLABS_API_KEY", "")
+    try: return st.secrets["ELEVENLABS_API_KEY"]
+    except: return os.getenv("ELEVENLABS_API_KEY", "")
 
-
-# ══════════════════════════════════════════════════════════
-# ── قائمة موديلات OpenRouter بالأولوية ───────────────────
-# ══════════════════════════════════════════════════════════
+# ── قائمة الموديلات ────────────────────────────────────────
 OPENROUTER_MODELS = [
     "meta-llama/llama-3.1-8b-instruct:free",
     "google/gemma-2-9b-it:free",
     "qwen/qwen-2-7b-instruct:free",
     "mistralai/mistral-7b-instruct-v0.1:free",
-    "microsoft/phi-3-mini-128k-instruct:free",
     "openrouter/free"
 ]
 
+SYSTEM_PROMPT = "أنت مساعد طبي ذكي يتحدث العربية. قدم نصائح عامة وانصح دائماً بمراجعة الطبيب."
 
-# ══════════════════════════════════════════════════════════
-# ── System Prompt الطبي ───────────────────────────────────
-# ══════════════════════════════════════════════════════════
-SYSTEM_PROMPT = (
-    "أنت مساعد طبي ذكي يتحدث العربية الفصحى.\n"
-    "مهمتك: تقديم معلومات طبية عامة وتوعوية.\n"
-    "⚠️ قواعد صارمة:\n"
-    "1. لست بديلاً عن الطبيب - دائماً انصح بمراجعة طبيب مختص\n"
-    "2. لا تشخّص الأمراض بشكل قاطع\n"
-    "3. لا تصف أدوية بجرعات محددة\n"
-    "4. في حالات الطوارئ، انصح بالاتصال بالإسعاف فوراً\n"
-    "5. استخدم لغة عربية واضحة ومبسطة\n"
-    "6. اطلب توضيحات إذا كانت الأعراض غير واضحة"
-)
-
-
-# ══════════════════════════════════════════════════════════
-# ── رد OpenRouter مع fallback تلقائي للموديلات ───────────
-# ══════════════════════════════════════════════════════════
+# ── وظيفة جلب الرد ──────────────────────────────────────────
 def get_response(text: str, history: list) -> str:
     api_key = get_openrouter_key()
     if not api_key:
-        return "⚠️ لم يتم تعيين OPENROUTER_API_KEY في إعدادات Streamlit Secrets."
+        return "⚠️ يرجى إضافة OPENROUTER_API_KEY في الإعدادات."
 
-    # بناء تاريخ المحادثة
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for msg in history:
         messages.append(msg)
@@ -143,342 +95,107 @@ def get_response(text: str, history: list) -> str:
         try:
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://medical-assistant.streamlit.app",
-                    "X-Title": "Medical Assistant"
-                },
-                json={
-                    "model": model_name,
-                    "messages": messages,
-                    "max_tokens": 1000,
-                },
-                timeout=30
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": model_name, "messages": messages, "max_tokens": 800},
+                timeout=25
             )
             if resp.status_code == 200:
                 data = resp.json()
-                if "choices" in data and len(data["choices"]) > 0:
-                    content = data["choices"][0].get("message", {}).get("content")
+                choices = data.get("choices", [])
+                if choices and len(choices) > 0:
+                    content = choices[0].get("message", {}).get("content")
                     if content:
                         reply = content.strip()
-                        history.append({"role": "user",      "content": text})
-                        history.append({"role": "assistant",  "content": reply})
+                        history.append({"role": "user", "content": text})
+                        history.append({"role": "assistant", "content": reply})
                         st.session_state["active_model"] = model_name
                         return reply
-                    else:
-                        last_error = f"{model_name}: استجابة فارغة من الموديل"
-                        continue
-                else:
-                    last_error = f"{model_name}: هيكل استجابة غير متوقع"
-                    continue
-            elif resp.status_code in [401, 403]:
-                return "❌ خطأ في مفتاح API (Unauthorized). تأكد من صحة المفتاح."
-            elif resp.status_code in [429, 503, 502, 504]:
-                last_error = f"{model_name}: خطأ في الخادم أو تجاوز الحد ({resp.status_code})"
-                continue
+                last_error = f"رد فارغ من {model_name}"
             else:
-                last_error = f"{model_name}: خطأ {resp.status_code} - {resp.text}"
-                continue
+                last_error = f"خطأ {resp.status_code} من {model_name}"
         except Exception as e:
-            last_error = f"Error with {model_name}: {str(e)}"
+            last_error = str(e)
             continue
+    
+    return f"❌ فشل في الحصول على رد: {last_error}"
 
-    return f"⚠️ كل الموديلات وصلت الحد المسموح.\n({last_error})"
-
-
-# ══════════════════════════════════════════════════════════
-# ── تحويل نص → صوت (ElevenLabs أو gTTS كـ fallback) ──────
-# ══════════════════════════════════════════════════════════
-def _gtts_fallback(text: str) -> str:
-    """يستخدم gTTS لو مفيش ElevenLabs key أو فيه خطأ."""
-    try:
-        from gtts import gTTS
-        tts = gTTS(text=text, lang="ar", slow=False)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            tts.save(f.name)
-            audio_bytes = open(f.name, "rb").read()
-        os.remove(f.name)
-        b64 = base64.b64encode(audio_bytes).decode()
-        return (
-            '<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">'
-            f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
-            '</audio>'
-        )
-    except Exception as e:
-        return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
-
-
-def text_to_audio_html(text: str) -> str:
+# ── وظيفة الصوت ────────────────────────────────────────────
+def generate_audio_base64(text: str) -> str:
     xi_key = get_elevenlabs_key()
-    if not xi_key:
-        return _gtts_fallback(text)
-
-    voice_id = st.session_state.get("el_voice_id", "IES4nrmZdUBHByLBde0P")
-    try:
-        resp = requests.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-            headers={"xi-api-key": xi_key, "Content-Type": "application/json"},
-            json={
-                "text": text,
-                "model_id": "eleven_turbo_v2_5",
-                "voice_settings": {
-                    "stability": 0.5,
-                    "similarity_boost": 0.75,
-                    "style": 0.3,
-                    "use_speaker_boost": True
-                }
-            },
-            timeout=20
-        )
-        if resp.status_code == 200:
-            b64 = base64.b64encode(resp.content).decode()
-            return (
-                '<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">'
-                f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
-                '</audio>'
+    audio_content = None
+    
+    # محاولة ElevenLabs أولاً
+    if xi_key:
+        voice_id = st.session_state.get("el_voice_id", "IES4nrmZdUBHByLBde0P")
+        try:
+            resp = requests.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                headers={"xi-api-key": xi_key, "Content-Type": "application/json"},
+                json={"text": text, "model_id": "eleven_turbo_v2_5"},
+                timeout=15
             )
-        else:
-            try:
-                err_data = resp.json()
-                # التحقق من نوع الخطأ في ElevenLabs
-                if "detail" in err_data:
-                    detail = err_data["detail"]
-                    if isinstance(detail, dict) and detail.get("status") == "quota_exceeded":
-                        st.error("🚨 رصيد ElevenLabs خلص! تم التحويل لـ gTTS.")
-                    else:
-                        st.warning(f"⚠️ ElevenLabs: {detail}")
-                else:
-                    st.warning(f"⚠️ ElevenLabs Error {resp.status_code}")
-            except:
-                st.warning(f"⚠️ ElevenLabs Error {resp.status_code}")
-            
-            return _gtts_fallback(text)
-    except Exception as e:
-        return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
+            if resp.status_code == 200:
+                audio_content = resp.content
+            else:
+                st.warning(f"ElevenLabs Error: {resp.status_code}")
+        except: pass
 
+    # Fallback لـ gTTS
+    if not audio_content:
+        try:
+            from gtts import gTTS
+            tts = gTTS(text=text, lang="ar")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+                tts.save(f.name)
+                audio_content = open(f.name, "rb").read()
+            os.remove(f.name)
+        except Exception as e:
+            return ""
 
-# ══════════════════════════════════════════════════════════
-# الواجهة
-# ══════════════════════════════════════════════════════════
-st.markdown("<h1 style='text-align:center;color:white;margin-bottom:2px'>🩺 مساعد طبي صوتي</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;color:#78909c;font-size:14px'>اسأل بصوتك أو اكتب سؤالك الطبي</p>", unsafe_allow_html=True)
+    if audio_content:
+        return base64.b64encode(audio_content).decode()
+    return ""
 
 # ── تهيئة الحالة ───────────────────────────────────────────
-for key, default in [
-    ("messages",      []),
-    ("chat_history",  []),
-    ("last_audio",    ""),
-    ("status",        "جاهز ✅"),
-    ("active_model",  OPENROUTER_MODELS[0]),   # ✅ صح
-    ("el_voice_id",   "IES4nrmZdUBHByLBde0P"), # ✅ متطابق مع القائمة
-]:
-    if key not in st.session_state:
-        st.session_state[key] = default
+if "messages" not in st.session_state: st.session_state.messages = []
+if "chat_history" not in st.session_state: st.session_state.chat_history = []
+if "active_model" not in st.session_state: st.session_state.active_model = OPENROUTER_MODELS[0]
 
-# ── مؤشر الموديل النشط ────────────────────────────────────
-st.markdown(
-    f"<p style='text-align:center;color:#546e7a;font-size:12px;margin:0'>⚡ {st.session_state['active_model']}</p>",
-    unsafe_allow_html=True
-)
+# ── الواجهة ────────────────────────────────────────────────
+st.markdown("<h1 style='text-align:center;color:white;'>🩺 مساعد طبي صوتي</h1>", unsafe_allow_html=True)
+st.markdown(f"<p style='text-align:center;color:#90caf9;font-size:14px;'>🤖 الموديل النشط: {st.session_state.active_model}</p>", unsafe_allow_html=True)
 
-# ── عرض المحادثة ───────────────────────────────────────────
-st.markdown("<div style='min-height:50px'>", unsafe_allow_html=True)
-for msg in st.session_state.messages:
+# عرض المحادثة
+for i, msg in enumerate(st.session_state.messages):
     if msg["role"] == "user":
         st.markdown(f'<div class="chat-user">🧑 {msg["text"]}</div><div class="clearfix"></div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="chat-ai">🩺 {msg["text"]}</div><div class="clearfix"></div>', unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+        if msg.get("audio"):
+            # استخدام مكون الصوت الرسمي من Streamlit لضمان التوافق
+            st.audio(f"data:audio/mp3;base64,{msg['audio']}", format="audio/mp3", autoplay=(i == len(st.session_state.messages)-1))
+            # إضافة زر إعادة تشغيل يدوي إذا لزم الأمر
+            if st.button(f"▶️ إعادة تشغيل الصوت", key=f"play_{i}"):
+                st.audio(f"data:audio/mp3;base64,{msg['audio']}", format="audio/mp3", autoplay=True)
 
-# ── آخر رد صوتي ───────────────────────────────────────────
-if st.session_state.last_audio:
-    st.markdown(st.session_state.last_audio, unsafe_allow_html=True)
-
-# ── الحالة ─────────────────────────────────────────────────
-st.markdown(f'<div class="status-card">{st.session_state.status}</div>', unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════
-# الإدخال الصوتي (Web Speech API)
-# ══════════════════════════════════════════════════════════
-st.markdown("""
-<div class="info-box">
-💡 <b>الإدخال الصوتي:</b> اضغط الزرار الأخضر، تكلم، وبعدين اضغط "إرسال"
-</div>
-""", unsafe_allow_html=True)
-
-st.components.v1.html("""
-<div style="text-align:center; margin: 16px 0;">
-    <button id="startBtn" onclick="startListening()"
-        style="background:linear-gradient(135deg,#1a6b4a,#27ae60);color:white;
-               border:none;border-radius:50px;padding:14px 32px;font-size:17px;
-               font-family:'Cairo',sans-serif;font-weight:700;cursor:pointer;
-               box-shadow:0 4px 20px rgba(39,174,96,0.35);margin:4px;">
-        🎤 ابدأ الكلام
-    </button>
-    <button id="stopBtn" onclick="stopListening()" disabled
-        style="background:linear-gradient(135deg,#922b21,#e74c3c);color:white;
-               border:none;border-radius:50px;padding:14px 32px;font-size:17px;
-               font-family:'Cairo',sans-serif;font-weight:700;cursor:pointer;
-               box-shadow:0 4px 20px rgba(231,76,60,0.35);margin:4px;opacity:0.5;">
-        ⏹ وقف
-    </button>
-    <p id="statusTxt" style="color:#90caf9;font-family:'Cairo',sans-serif;
-       font-size:15px;margin-top:10px;">اضغط "ابدأ الكلام"</p>
-    <div id="resultBox" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
-         border-radius:12px;padding:14px;margin-top:12px;min-height:48px;
-         color:white;font-family:'Cairo',sans-serif;font-size:16px;
-         text-align:right;direction:rtl;display:none;">
-    </div>
-</div>
-<script>
-let recognition = null;
-let finalText = "";
-
-function startListening() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        document.getElementById('statusTxt').textContent = '❌ استخدم Chrome';
-        return;
-    }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SR();
-    recognition.lang = 'ar-EG';
-    recognition.continuous = false;
-    recognition.interimResults = true;
-
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('startBtn').style.opacity = '0.5';
-    document.getElementById('stopBtn').disabled = false;
-    document.getElementById('stopBtn').style.opacity = '1';
-    document.getElementById('statusTxt').textContent = '🎤 بسمعك... اتكلم!';
-    document.getElementById('statusTxt').style.color = '#2ecc71';
-    document.getElementById('resultBox').style.display = 'block';
-    document.getElementById('resultBox').textContent = '...';
-    finalText = "";
-
-    recognition.onresult = (event) => {
-        let interim = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
-            else interim += event.results[i][0].transcript;
-        }
-        document.getElementById('resultBox').textContent = finalText || interim;
-    };
-
-    recognition.onend = () => {
-        resetButtons();
-        if (finalText.trim()) {
-            document.getElementById('statusTxt').textContent = '✅ اتسجل! اضغط "إرسال"';
-            document.getElementById('statusTxt').style.color = '#f39c12';
-            const inp = window.parent.document.querySelector('input[aria-label="speech_result"]');
-            if (inp) {
-                inp.value = finalText;
-                inp.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-        } else {
-            document.getElementById('statusTxt').textContent = '❌ مفيش كلام، جرب تاني';
-            document.getElementById('statusTxt').style.color = '#e74c3c';
-        }
-    };
-
-    recognition.onerror = (e) => {
-        resetButtons();
-        document.getElementById('statusTxt').textContent = '❌ خطأ: ' + e.error;
-        document.getElementById('statusTxt').style.color = '#e74c3c';
-    };
-
-    recognition.start();
-}
-
-function stopListening() { if (recognition) recognition.stop(); }
-
-function resetButtons() {
-    document.getElementById('startBtn').disabled = false;
-    document.getElementById('startBtn').style.opacity = '1';
-    document.getElementById('stopBtn').disabled = true;
-    document.getElementById('stopBtn').style.opacity = '0.5';
-}
-</script>
-""", height=220)
-
-# ── إدخال نصي + إرسال ─────────────────────────────────────
+# الإدخال
 with st.form("input_form", clear_on_submit=True):
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        user_input = st.text_input(
-            "speech_result",
-            placeholder="اكتب سؤالك هنا أو الصق النص من الميكروفون...",
-            label_visibility="collapsed"
-        )
-    with col2:
-        submitted = st.form_submit_button("📤 إرسال", use_container_width=True)
+    user_input = st.text_input("اكتب سؤالك هنا...", label_visibility="collapsed")
+    submitted = st.form_submit_button("📤 إرسال")
 
 if submitted and user_input.strip():
-    st.session_state.status = "🔄 بيفكر في الرد..."
     st.session_state.messages.append({"role": "user", "text": user_input.strip()})
-
-    with st.spinner("🩺 جاري الرد..."):
+    with st.spinner("جاري التفكير..."):
         reply = get_response(user_input.strip(), st.session_state.chat_history)
-
-    st.session_state.messages.append({"role": "ai", "text": reply})
-    st.session_state.last_audio = text_to_audio_html(reply)
-    st.session_state.status = "🔊 بيتكلم..."
+        audio_b64 = generate_audio_base64(reply)
+        st.session_state.messages.append({"role": "ai", "text": reply, "audio": audio_b64})
     st.rerun()
 
-# ── أزرار أسفل ─────────────────────────────────────────────
-st.divider()
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("🗑️ مسح المحادثة", use_container_width=True):
-        st.session_state.messages      = []
-        st.session_state.chat_history  = []
-        st.session_state.last_audio    = ""
-        st.session_state.status        = "جاهز ✅"
+# الإعدادات
+with st.expander("⚙️ الإعدادات"):
+    st.session_state["manual_openrouter_key"] = st.text_input("OpenRouter API Key", value=st.session_state.get("manual_openrouter_key", ""), type="password")
+    st.session_state["manual_elevenlabs_key"] = st.text_input("ElevenLabs API Key", value=st.session_state.get("manual_elevenlabs_key", ""), type="password")
+    if st.button("🗑️ مسح المحادثة"):
+        st.session_state.messages = []
+        st.session_state.chat_history = []
         st.rerun()
-with col2:
-    if st.button("🔕 إيقاف الصوت", use_container_width=True):
-        st.session_state.last_audio = ""
-        st.rerun()
-
-# ── إعدادات ────────────────────────────────────────────────
-with st.expander("⚙️ إعدادات"):
-    st.markdown("#### 🔑 إعداد مفاتيح API")
-    
-    manual_or = st.text_input("OpenRouter API Key", value=st.session_state.get("manual_openrouter_key", ""), type="password")
-    if manual_or:
-        st.session_state["manual_openrouter_key"] = manual_or
-        
-    manual_el = st.text_input("ElevenLabs API Key", value=st.session_state.get("manual_elevenlabs_key", ""), type="password")
-    if manual_el:
-        st.session_state["manual_elevenlabs_key"] = manual_el
-
-    st.markdown("---")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown("[🔑 OpenRouter Key مجاني](https://openrouter.ai/keys)")
-        openrouter_ok = "✅ متصل" if get_openrouter_key() else "❌ مش متصل"
-        st.info(f"OpenRouter: {openrouter_ok}")
-    with col_b:
-        st.markdown("[🎙️ ElevenLabs Key](https://elevenlabs.io/app/settings/api-keys)")
-        xi_ok = "✅ متصل" if get_elevenlabs_key() else "⚠️ gTTS (احتياطي)"
-        st.info(f"ElevenLabs: {xi_ok}")
-
-    st.markdown("---")
-    st.markdown("#### 🎙️ اختار صوت ElevenLabs")
-    voices = {
-        "مصري (Karim)":   "IES4nrmZdUBHByLBde0P",
-        "Custom Voice ID": "custom"
-    }
-    selected_voice = st.selectbox("الصوت", list(voices.keys()))
-    if selected_voice == "Custom Voice ID":
-        custom_id = st.text_input("أدخل Voice ID")
-        if custom_id:
-            st.session_state["el_voice_id"] = custom_id
-    else:
-        st.session_state["el_voice_id"] = voices[selected_voice]
-
-    st.markdown("---")
-    st.markdown("#### 🤖 الموديلات المتاحة (fallback تلقائي)")
-    for m in OPENROUTER_MODELS:   # ✅ OpenRouter مش Gemini
-        active = "← **نشط الآن**" if m == st.session_state.get("active_model") else ""
-        st.markdown(f"- `{m}` {active}")
