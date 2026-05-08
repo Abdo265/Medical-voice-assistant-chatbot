@@ -142,10 +142,11 @@ def get_openrouter_key() -> str:
 # ── الموديلات ─────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════
 OPENROUTER_MODELS = [
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "google/gemma-2-9b-it:free",
-    "qwen/qwen-2-7b-instruct:free",
-    "mistralai/mistral-7b-instruct-v0.1:free",
+    "openrouter/free",                          # ← router تلقائي دايماً شغال ✅
+    "deepseek/deepseek-chat-v3-0324:free",      # DeepSeek V3 - قوي ومجاني
+    "meta-llama/llama-3.3-70b-instruct:free",   # Llama 3.3 70B
+    "qwen/qwen3-8b:free",                       # Qwen3 - أحدث
+    "mistralai/mistral-small-3.1-24b-instruct:free", # Mistral Small 3.1
 ]
 
 SYSTEM_PROMPT = (
