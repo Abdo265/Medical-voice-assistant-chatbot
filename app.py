@@ -78,7 +78,8 @@ div[data-testid="stButton"] button {
 @st.cache_resource
 def load_model():
     # يحاول يجيب المفتاح من Streamlit Secrets أو متغيرات البيئة
-    api_key = ""
+    api_key = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8"
+
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
     except Exception:
