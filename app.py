@@ -77,6 +77,9 @@ div[data-testid="stButton"] button {
 # ── مفاتيح API (من Secrets فقط - لا تُكتب في الكود) ──────
 # ══════════════════════════════════════════════════════════
 def get_openrouter_key() -> str:
+    # الأولوية: 1. المدخل يدوياً في الجلسة، 2. Secrets، 3. متغيرات البيئة
+    if "manual_openrouter_key" in st.session_state and st.session_state["manual_openrouter_key"]:
+        return st.session_state["manual_openrouter_key"]
     try:
         return st.secrets["OPENROUTER_API_KEY"]
     except Exception:
@@ -84,6 +87,8 @@ def get_openrouter_key() -> str:
 
 
 def get_elevenlabs_key() -> str:
+    if "manual_elevenlabs_key" in st.session_state and st.session_state["manual_elevenlabs_key"]:
+        return st.session_state["manual_elevenlabs_key"]
     try:
         return st.secrets["ELEVENLABS_API_KEY"]
     except Exception:
@@ -148,19 +153,27 @@ def get_response(text: str, history: list) -> str:
                 timeout=30
             )
             if resp.status_code == 200:
-                reply = resp.json()["choices"][0]["message"]["content"].strip()
-                # ✅ نضيف للـ history بعد نجاح الـ response بس
-                history.append({"role": "user",      "content": text})
-                history.append({"role": "assistant",  "content": reply})
-                st.session_state["active_model"] = model_name
-                return reply
-            elif resp.status_code in [429, 503]:
-                last_error = f"{model_name}: وصل الحد المسموح"
+                data = resp.json()
+                if "choices" in data and len(data["choices"]) > 0:
+                    reply = data["choices"][0]["message"]["content"].strip()
+                    history.append({"role": "user",      "content": text})
+                    history.append({"role": "assistant",  "content": reply})
+                    st.session_state["active_model"] = model_name
+                    return reply
+                else:
+                    last_error = f"Response structure error: {data}"
+                    continue
+            elif resp.status_code in [401, 403]:
+                return "❌ خطأ في مفتاح API (Unauthorized). تأكد من صحة المفتاح."
+            elif resp.status_code in [429, 503, 502, 504]:
+                last_error = f"{model_name}: خطأ في الخادم أو تجاوز الحد ({resp.status_code})"
                 continue
             else:
-                return f"❌ خطأ {resp.status_code}: {resp.text}"
+                last_error = f"{model_name}: خطأ {resp.status_code} - {resp.text}"
+                continue
         except Exception as e:
-            return f"❌ خطأ في الاتصال: {e}"
+            last_error = f"Error with {model_name}: {str(e)}"
+            continue
 
     return f"⚠️ كل الموديلات وصلت الحد المسموح.\n({last_error})"
 
@@ -408,12 +421,17 @@ with col2:
 
 # ── إعدادات ────────────────────────────────────────────────
 with st.expander("⚙️ إعدادات"):
-    st.markdown("#### 🔑 API Keys — أضفها في Streamlit Secrets")
-    st.code(
-        'OPENROUTER_API_KEY = "مفتاحك_هنا"\nELEVENLABS_API_KEY = "مفتاحك_هنا"',
-        language="toml"
-    )
+    st.markdown("#### 🔑 إعداد مفاتيح API")
+    
+    manual_or = st.text_input("OpenRouter API Key", value=st.session_state.get("manual_openrouter_key", ""), type="password")
+    if manual_or:
+        st.session_state["manual_openrouter_key"] = manual_or
+        
+    manual_el = st.text_input("ElevenLabs API Key", value=st.session_state.get("manual_elevenlabs_key", ""), type="password")
+    if manual_el:
+        st.session_state["manual_elevenlabs_key"] = manual_el
 
+    st.markdown("---")
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("[🔑 OpenRouter Key مجاني](https://openrouter.ai/keys)")
