@@ -99,11 +99,11 @@ def get_elevenlabs_key() -> str:
 # ── قائمة موديلات OpenRouter بالأولوية ───────────────────
 # ══════════════════════════════════════════════════════════
 OPENROUTER_MODELS = [
-    "google/gemma-2-9b-it:free",
     "meta-llama/llama-3.1-8b-instruct:free",
+    "google/gemma-2-9b-it:free",
     "qwen/qwen-2-7b-instruct:free",
-    "mistralai/pixtral-12b:free",
-    "microsoft/phi-3-medium-128k-instruct:free",
+    "mistralai/mistral-7b-instruct-v0.1:free",
+    "microsoft/phi-3-mini-128k-instruct:free",
     "openrouter/free"
 ]
 
@@ -159,13 +159,18 @@ def get_response(text: str, history: list) -> str:
             if resp.status_code == 200:
                 data = resp.json()
                 if "choices" in data and len(data["choices"]) > 0:
-                    reply = data["choices"][0]["message"]["content"].strip()
-                    history.append({"role": "user",      "content": text})
-                    history.append({"role": "assistant",  "content": reply})
-                    st.session_state["active_model"] = model_name
-                    return reply
+                    content = data["choices"][0].get("message", {}).get("content")
+                    if content:
+                        reply = content.strip()
+                        history.append({"role": "user",      "content": text})
+                        history.append({"role": "assistant",  "content": reply})
+                        st.session_state["active_model"] = model_name
+                        return reply
+                    else:
+                        last_error = f"{model_name}: استجابة فارغة من الموديل"
+                        continue
                 else:
-                    last_error = f"Response structure error: {data}"
+                    last_error = f"{model_name}: هيكل استجابة غير متوقع"
                     continue
             elif resp.status_code in [401, 403]:
                 return "❌ خطأ في مفتاح API (Unauthorized). تأكد من صحة المفتاح."
@@ -234,8 +239,20 @@ def text_to_audio_html(text: str) -> str:
                 '</audio>'
             )
         else:
-            err_detail = resp.json().get("detail", resp.text)
-            st.warning(f"⚠️ ElevenLabs ({resp.status_code}): {err_detail} — بستخدم الصوت الاحتياطي")
+            try:
+                err_data = resp.json()
+                # التحقق من نوع الخطأ في ElevenLabs
+                if "detail" in err_data:
+                    detail = err_data["detail"]
+                    if isinstance(detail, dict) and detail.get("status") == "quota_exceeded":
+                        st.error("🚨 رصيد ElevenLabs خلص! تم التحويل لـ gTTS.")
+                    else:
+                        st.warning(f"⚠️ ElevenLabs: {detail}")
+                else:
+                    st.warning(f"⚠️ ElevenLabs Error {resp.status_code}")
+            except:
+                st.warning(f"⚠️ ElevenLabs Error {resp.status_code}")
+            
             return _gtts_fallback(text)
     except Exception as e:
         return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
