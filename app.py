@@ -9,7 +9,7 @@ import tempfile
 import base64
 import streamlit as st
 import google.generativeai as genai
-from gtts import gTTS
+import requests
 
 if os.name == "nt":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -77,43 +77,107 @@ div[data-testid="stButton"] button {
 # ── إعداد Gemini ───────────────────────────────────────────
 @st.cache_resource
 def load_model():
-    # يحاول يجيب المفتاح من Streamlit Secrets أو متغيرات البيئة
-    api_key = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8"
-
+    # أولوية: Streamlit Secrets → متغير البيئة → المفتاح الثابت
+    api_key = ""
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
     except Exception:
+        pass
+
+    if not api_key:
         api_key = os.getenv("GEMINI_API_KEY", "")
 
     if not api_key:
-        api_key = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8" 
+        api_key = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8"
+
+    if not api_key:
+        return None
 
     genai.configure(api_key=api_key)
     return genai.GenerativeModel(
-        "gemini-1.5-flash",
+        "gemini-2.0-flash",
         system_instruction=(
-            "أنت مساعد طبي ذكي تتكلم العربية المصرية. "
-            "أجب بشكل واضح ومختصر (مش أكتر من 4 جمل). "
-            "لو السؤال طبي خطير، انصح المريض يروح دكتور فوراً. "
-            "لا تشخّص أمراض بشكل قاطع."
+            "أنت مساعد طبي ذكي يتحدث العربية الفصحى.\n"
+            "مهمتك: تقديم معلومات طبية عامة وتوعوية.\n"
+            "⚠️ قواعد صارمة:\n"
+            "1. لست بديلاً عن الطبيب - دائماً انصح بمراجعة طبيب مختص\n"
+            "2. لا تشخّص الأمراض بشكل قاطع\n"
+            "3. لا تصف أدوية بجرعات محددة\n"
+            "4. في حالات الطوارئ، انصح بالاتصال بالإسعاف فوراً\n"
+            "5. استخدم لغة عربية واضحة ومبسطة\n"
+            "6. اطلب توضيحات إذا كانت الأعراض غير واضحة"
         )
     )
 
-
-# ── تحويل نص لصوت (HTML autoplay) ─────────────────────────
-def text_to_audio_html(text: str) -> str:
+# ── تحويل نص لصوت بـ ElevenLabs ──────────────────────────
+def get_elevenlabs_key() -> str:
     try:
-        tts = gTTS(text=text, lang="ar", slow=False)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            tts.save(f.name)
-            audio_bytes = open(f.name, "rb").read()
-        os.remove(f.name)
-        b64 = base64.b64encode(audio_bytes).decode()
-        return f"""
-        <audio autoplay style="width:100%; margin-top:8px; border-radius:8px;">
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-        </audio>
-        """
+        return st.secrets["ELEVENLABS_API_KEY"]
+    except Exception:
+        return os.getenv("ELEVENLABS_API_KEY", "")
+
+def text_to_audio_html(text: str) -> str:
+    xi_key = get_elevenlabs_key()
+
+    # لو مفيش ElevenLabs key، نرجع لـ gTTS كـ fallback
+    if not xi_key:
+        try:
+            from gtts import gTTS
+            tts = gTTS(text=text, lang="ar", slow=False)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+                tts.save(f.name)
+                audio_bytes = open(f.name, "rb").read()
+            os.remove(f.name)
+            b64 = base64.b64encode(audio_bytes).decode()
+            return f'''<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">
+                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>'''
+        except Exception as e:
+            return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
+
+    # ElevenLabs API
+    # Voice ID عربي طبيعي - "Arabic Male" من ElevenLabs
+    # ممكن تغيره من إعدادات التطبيق
+    voice_id = st.session_state.get("el_voice_id", "cgSgspJ2msm6clMCkdW9")
+
+    try:
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        headers = {
+            "xi-api-key": xi_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "text": text,
+            "model_id": "eleven_turbo_v2_5",   # أسرع موديل وبيدعم العربي
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+                "style": 0.3,
+                "use_speaker_boost": True
+            }
+        }
+        resp = requests.post(url, json=payload, headers=headers, timeout=20)
+
+        if resp.status_code == 200:
+            b64 = base64.b64encode(resp.content).decode()
+            return f'''<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">
+                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>'''
+        else:
+            # Fallback لـ gTTS لو فيه مشكلة
+            err = resp.json().get("detail", {})
+            st.warning(f"⚠️ ElevenLabs: {err} — بستخدم الصوت الاحتياطي")
+            from gtts import gTTS
+            tts = gTTS(text=text, lang="ar", slow=False)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+                tts.save(f.name)
+                audio_bytes = open(f.name, "rb").read()
+            os.remove(f.name)
+            b64 = base64.b64encode(audio_bytes).decode()
+            return f'''<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">
+                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>'''
+
     except Exception as e:
         return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
 
@@ -322,15 +386,38 @@ with col2:
         st.rerun()
 
 # ── إعدادات ────────────────────────────────────────────────
-with st.expander("⚙️ إعدادات API Key"):
+with st.expander("⚙️ إعدادات API Keys"):
+    st.markdown("### Gemini")
     st.markdown("""
-    **على Streamlit Cloud:**
-    1. روح لـ App Settings ← Secrets
-    2. أضف:
+    **على Streamlit Cloud → Settings → Secrets:**
     ```toml
-    GEMINI_API_KEY = "مفتاحك_هنا"
+    GEMINI_API_KEY = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8" 
+    ELEVENLABS_API_KEY = "sk_6856316767b16ec48fd6c89a72a603a5d3e06c535a94f0bc"
     ```
     """)
-    st.markdown("[🔑 احصل على مفتاح مجاني](https://aistudio.google.com/app/apikey)")
-    status_model = "✅ متصل" if model else "❌ مش متصل - محتاج API Key"
-    st.info(f"حالة Gemini: {status_model}")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("[🔑 Gemini API Key مجاني](https://aistudio.google.com/app/apikey)")
+        status_model = "✅ متصل" if model else "❌ مش متصل"
+        st.info(f"Gemini: {status_model}")
+    with col_b:
+        st.markdown("[🎙️ ElevenLabs API Key](https://elevenlabs.io/app/settings/api-keys)")
+        xi_status = "✅ متصل" if get_elevenlabs_key() else "⚠️ مش متصل (بيستخدم gTTS)"
+        st.info(f"ElevenLabs: {xi_status}")
+
+    st.markdown("---")
+    st.markdown("### 🎙️ اختار صوت ElevenLabs")
+    voices = {
+        "Adam (إنجليزي/عربي)": "pNInz6obpgDQGcFmaJgB",
+        "Arabic Male – cgSgspJ2": "cgSgspJ2msm6clMCkdW9",
+        "Aria": "9BWtsMINqrJLrRacOk9x",
+        "Custom Voice ID": "custom"
+    }
+    selected_voice = st.selectbox("الصوت", list(voices.keys()))
+    if selected_voice == "Custom Voice ID":
+        custom_id = st.text_input("أدخل Voice ID")
+        if custom_id:
+            st.session_state["el_voice_id"] = custom_id
+    else:
+        st.session_state["el_voice_id"] = voices[selected_voice]
+    st.caption("💡 لو عندك صوت عربي خاص على ElevenLabs، اختار Custom واكتب الـ Voice ID")
