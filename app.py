@@ -74,127 +74,134 @@ div[data-testid="stButton"] button {
 """, unsafe_allow_html=True)
 
 
-# ── إعداد Gemini ───────────────────────────────────────────
-@st.cache_resource
-def load_model():
-    # أولوية: Streamlit Secrets → متغير البيئة → المفتاح الثابت
-    api_key = ""
+# ══════════════════════════════════════════════════════════
+# ── مفاتيح API (من Secrets فقط - لا تُكتب في الكود) ──────
+# ══════════════════════════════════════════════════════════
+def get_gemini_key() -> str:
     try:
-        api_key = st.secrets["GEMINI_API_KEY"]
+        return st.secrets["GEMINI_API_KEY"]
     except Exception:
-        pass
+        return os.getenv("GEMINI_API_KEY", "")
 
-    if not api_key:
-        api_key = os.getenv("GEMINI_API_KEY", "")
-
-    if not api_key:
-        api_key = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8"
-
-    if not api_key:
-        return None
-
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(
-        "gemini-2.0-flash",
-        system_instruction=(
-            "أنت مساعد طبي ذكي يتحدث العربية الفصحى.\n"
-            "مهمتك: تقديم معلومات طبية عامة وتوعوية.\n"
-            "⚠️ قواعد صارمة:\n"
-            "1. لست بديلاً عن الطبيب - دائماً انصح بمراجعة طبيب مختص\n"
-            "2. لا تشخّص الأمراض بشكل قاطع\n"
-            "3. لا تصف أدوية بجرعات محددة\n"
-            "4. في حالات الطوارئ، انصح بالاتصال بالإسعاف فوراً\n"
-            "5. استخدم لغة عربية واضحة ومبسطة\n"
-            "6. اطلب توضيحات إذا كانت الأعراض غير واضحة"
-        )
-    )
-
-# ── تحويل نص لصوت بـ ElevenLabs ──────────────────────────
 def get_elevenlabs_key() -> str:
     try:
         return st.secrets["ELEVENLABS_API_KEY"]
     except Exception:
         return os.getenv("ELEVENLABS_API_KEY", "")
 
-def text_to_audio_html(text: str) -> str:
-    xi_key = get_elevenlabs_key()
 
-    # لو مفيش ElevenLabs key، نرجع لـ gTTS كـ fallback
-    if not xi_key:
+# ══════════════════════════════════════════════════════════
+# ── System Prompt الطبي ───────────────────────────────────
+# ══════════════════════════════════════════════════════════
+SYSTEM_PROMPT = (
+    "أنت مساعد طبي ذكي يتحدث العربية الفصحى.\n"
+    "مهمتك: تقديم معلومات طبية عامة وتوعوية.\n"
+    "⚠️ قواعد صارمة:\n"
+    "1. لست بديلاً عن الطبيب - دائماً انصح بمراجعة طبيب مختص\n"
+    "2. لا تشخّص الأمراض بشكل قاطع\n"
+    "3. لا تصف أدوية بجرعات محددة\n"
+    "4. في حالات الطوارئ، انصح بالاتصال بالإسعاف فوراً\n"
+    "5. استخدم لغة عربية واضحة ومبسطة\n"
+    "6. اطلب توضيحات إذا كانت الأعراض غير واضحة"
+)
+
+# ── قائمة موديلات Gemini بالأولوية (fallback تلقائي) ──────
+GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-8b",
+]
+
+
+# ══════════════════════════════════════════════════════════
+# ── رد Gemini مع fallback تلقائي للموديلات ───────────────
+# ══════════════════════════════════════════════════════════
+def get_response(text: str, history: list) -> str:
+    api_key = get_gemini_key()
+    if not api_key:
+        return "⚠️ لم يتم تعيين GEMINI_API_KEY في إعدادات Streamlit Secrets."
+
+    last_error = ""
+    for model_name in GEMINI_MODELS:
         try:
-            from gtts import gTTS
-            tts = gTTS(text=text, lang="ar", slow=False)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-                tts.save(f.name)
-                audio_bytes = open(f.name, "rb").read()
-            os.remove(f.name)
-            b64 = base64.b64encode(audio_bytes).decode()
-            return f'''<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">
-                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            </audio>'''
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name, system_instruction=SYSTEM_PROMPT)
+            chat = model.start_chat(history=history)
+            resp = chat.send_message(text)
+            reply = resp.text.strip()
+            history.append({"role": "user",  "parts": [text]})
+            history.append({"role": "model", "parts": [reply]})
+            st.session_state["active_model"] = model_name   # نحفظ الموديل النشط
+            return reply
         except Exception as e:
-            return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
+            err = str(e)
+            if any(x in err for x in ["429", "quota", "rate", "RESOURCE_EXHAUSTED"]):
+                last_error = f"{model_name}: وصل الحد المسموح"
+                continue   # جرّب الموديل التالي
+            else:
+                return f"❌ خطأ: {e}"
 
-    # ElevenLabs API
-    # Voice ID عربي طبيعي - "Arabic Male" من ElevenLabs
-    # ممكن تغيره من إعدادات التطبيق
-    voice_id = st.session_state.get("el_voice_id", "cgSgspJ2msm6clMCkdW9")
+    return f"⚠️ كل الموديلات وصلت الحد المسموح. انتظر دقيقة وحاول تاني.\n({last_error})"
 
+
+# ══════════════════════════════════════════════════════════
+# ── تحويل نص → صوت (ElevenLabs أو gTTS كـ fallback) ──────
+# ══════════════════════════════════════════════════════════
+def _gtts_fallback(text: str) -> str:
+    """يستخدم gTTS لو مفيش ElevenLabs key أو فيه خطأ."""
     try:
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        headers = {
-            "xi-api-key": xi_key,
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "text": text,
-            "model_id": "eleven_turbo_v2_5",   # أسرع موديل وبيدعم العربي
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-                "style": 0.3,
-                "use_speaker_boost": True
-            }
-        }
-        resp = requests.post(url, json=payload, headers=headers, timeout=20)
-
-        if resp.status_code == 200:
-            b64 = base64.b64encode(resp.content).decode()
-            return f'''<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">
-                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            </audio>'''
-        else:
-            # Fallback لـ gTTS لو فيه مشكلة
-            err = resp.json().get("detail", {})
-            st.warning(f"⚠️ ElevenLabs: {err} — بستخدم الصوت الاحتياطي")
-            from gtts import gTTS
-            tts = gTTS(text=text, lang="ar", slow=False)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-                tts.save(f.name)
-                audio_bytes = open(f.name, "rb").read()
-            os.remove(f.name)
-            b64 = base64.b64encode(audio_bytes).decode()
-            return f'''<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">
-                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            </audio>'''
-
+        from gtts import gTTS
+        tts = gTTS(text=text, lang="ar", slow=False)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+            tts.save(f.name)
+            audio_bytes = open(f.name, "rb").read()
+        os.remove(f.name)
+        b64 = base64.b64encode(audio_bytes).decode()
+        return (
+            '<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">'
+            f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
+            '</audio>'
+        )
     except Exception as e:
         return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
 
 
-# ── رد Gemini ──────────────────────────────────────────────
-def get_response(model, text: str, history: list) -> str:
-    if model is None:
-        return "⚠️ محتاج تضيف GEMINI_API_KEY في إعدادات Streamlit Secrets."
+def text_to_audio_html(text: str) -> str:
+    xi_key = get_elevenlabs_key()
+    if not xi_key:
+        return _gtts_fallback(text)
+
+    voice_id = st.session_state.get("el_voice_id", "cgSgspJ2msm6clMCkdW9")
     try:
-        chat = model.start_chat(history=history)
-        resp = chat.send_message(text)
-        reply = resp.text.strip()
-        history.append({"role": "user", "parts": [text]})
-        history.append({"role": "model", "parts": [reply]})
-        return reply
+        resp = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+            headers={"xi-api-key": xi_key, "Content-Type": "application/json"},
+            json={
+                "text": text,
+                "model_id": "eleven_turbo_v2_5",
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "style": 0.3,
+                    "use_speaker_boost": True
+                }
+            },
+            timeout=20
+        )
+        if resp.status_code == 200:
+            b64 = base64.b64encode(resp.content).decode()
+            return (
+                '<audio autoplay style="width:100%;margin-top:8px;border-radius:8px;">'
+                f'<source src="data:audio/mp3;base64,{b64}" type="audio/mp3">'
+                '</audio>'
+            )
+        else:
+            err_detail = resp.json().get("detail", resp.text)
+            st.warning(f"⚠️ ElevenLabs ({resp.status_code}): {err_detail} — بستخدم الصوت الاحتياطي")
+            return _gtts_fallback(text)
     except Exception as e:
-        return f"❌ خطأ: {e}"
+        return f"<p style='color:orange'>⚠️ مشكلة في الصوت: {e}</p>"
 
 
 # ══════════════════════════════════════════════════════════
@@ -205,15 +212,21 @@ st.markdown("<p style='text-align:center;color:#78909c;font-size:14px'>اسأل 
 
 # تهيئة الحالة
 for key, default in [
-    ("messages", []),
+    ("messages",       []),
     ("gemini_history", []),
-    ("last_audio", ""),
-    ("status", "جاهز ✅"),
+    ("last_audio",     ""),
+    ("status",         "جاهز ✅"),
+    ("active_model",   GEMINI_MODELS[0]),
+    ("el_voice_id",    "cgSgspJ2msm6clMCkdW9"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
 
-model = load_model()
+# ── مؤشر الموديل النشط ────────────────────────────────────
+st.markdown(
+    f"<p style='text-align:center;color:#546e7a;font-size:12px;margin:0'>⚡ {st.session_state['active_model']}</p>",
+    unsafe_allow_html=True
+)
 
 # ── عرض المحادثة ───────────────────────────────────────────
 st.markdown("<div style='min-height:50px'>", unsafe_allow_html=True)
@@ -232,16 +245,15 @@ if st.session_state.last_audio:
 st.markdown(f'<div class="status-card">{st.session_state.status}</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════
-# الإدخال الصوتي (Web Speech API - يشتغل في المتصفح مباشرة)
+# الإدخال الصوتي (Web Speech API)
 # ══════════════════════════════════════════════════════════
 st.markdown("""
 <div class="info-box">
-💡 <b>الإدخال الصوتي:</b> اضغط الزرار الأخضر، تكلم، وبعدين اضغط "إرسال الصوت"
+💡 <b>الإدخال الصوتي:</b> اضغط الزرار الأخضر، تكلم، وبعدين اضغط "إرسال"
 </div>
 """, unsafe_allow_html=True)
 
-# JavaScript للتعرف على الصوت في المتصفح
-speech_component = """
+st.components.v1.html("""
 <div style="text-align:center; margin: 16px 0;">
     <button id="startBtn" onclick="startListening()"
         style="background:linear-gradient(135deg,#1a6b4a,#27ae60);color:white;
@@ -265,20 +277,17 @@ speech_component = """
          text-align:right;direction:rtl;display:none;">
     </div>
 </div>
-
 <script>
 let recognition = null;
 let finalText = "";
 
 function startListening() {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        document.getElementById('statusTxt').textContent = '❌ المتصفح مش بيدعم التعرف على الصوت - استخدم Chrome';
-        document.getElementById('statusTxt').style.color = '#e74c3c';
+        document.getElementById('statusTxt').textContent = '❌ استخدم Chrome';
         return;
     }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
     recognition.lang = 'ar-EG';
     recognition.continuous = false;
     recognition.interimResults = true;
@@ -296,11 +305,8 @@ function startListening() {
     recognition.onresult = (event) => {
         let interim = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-                finalText += event.results[i][0].transcript;
-            } else {
-                interim += event.results[i][0].transcript;
-            }
+            if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+            else interim += event.results[i][0].transcript;
         }
         document.getElementById('resultBox').textContent = finalText || interim;
     };
@@ -308,16 +314,15 @@ function startListening() {
     recognition.onend = () => {
         resetButtons();
         if (finalText.trim()) {
-            document.getElementById('statusTxt').textContent = '✅ اتسجل الكلام! اضغط "إرسال الصوت"';
+            document.getElementById('statusTxt').textContent = '✅ اتسجل! اضغط "إرسال"';
             document.getElementById('statusTxt').style.color = '#f39c12';
-            // نحفظ في hidden input
-            const hiddenInput = window.parent.document.querySelector('input[aria-label="speech_result"]');
-            if (hiddenInput) {
-                hiddenInput.value = finalText;
-                hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+            const inp = window.parent.document.querySelector('input[aria-label="speech_result"]');
+            if (inp) {
+                inp.value = finalText;
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
             }
         } else {
-            document.getElementById('statusTxt').textContent = '❌ مفيش كلام اتسجل، جرب تاني';
+            document.getElementById('statusTxt').textContent = '❌ مفيش كلام، جرب تاني';
             document.getElementById('statusTxt').style.color = '#e74c3c';
         }
     };
@@ -331,9 +336,7 @@ function startListening() {
     recognition.start();
 }
 
-function stopListening() {
-    if (recognition) recognition.stop();
-}
+function stopListening() { if (recognition) recognition.stop(); }
 
 function resetButtons() {
     document.getElementById('startBtn').disabled = false;
@@ -342,9 +345,7 @@ function resetButtons() {
     document.getElementById('stopBtn').style.opacity = '0.5';
 }
 </script>
-"""
-
-st.components.v1.html(speech_component, height=220)
+""", height=220)
 
 # ── إدخال نصي + إرسال ─────────────────────────────────────
 with st.form("input_form", clear_on_submit=True):
@@ -363,7 +364,7 @@ if submitted and user_input.strip():
     st.session_state.messages.append({"role": "user", "text": user_input.strip()})
 
     with st.spinner("🩺 جاري الرد..."):
-        reply = get_response(model, user_input.strip(), st.session_state.gemini_history)
+        reply = get_response(user_input.strip(), st.session_state.gemini_history)
 
     st.session_state.messages.append({"role": "ai", "text": reply})
     st.session_state.last_audio = text_to_audio_html(reply)
@@ -375,10 +376,10 @@ st.divider()
 col1, col2 = st.columns(2)
 with col1:
     if st.button("🗑️ مسح المحادثة", use_container_width=True):
-        st.session_state.messages = []
+        st.session_state.messages       = []
         st.session_state.gemini_history = []
-        st.session_state.last_audio = ""
-        st.session_state.status = "جاهز ✅"
+        st.session_state.last_audio     = ""
+        st.session_state.status         = "جاهز ✅"
         st.rerun()
 with col2:
     if st.button("🔕 إيقاف الصوت", use_container_width=True):
@@ -386,32 +387,29 @@ with col2:
         st.rerun()
 
 # ── إعدادات ────────────────────────────────────────────────
-with st.expander("⚙️ إعدادات API Keys"):
-    st.markdown("### Gemini")
-    st.markdown("""
-    **على Streamlit Cloud → Settings → Secrets:**
-    ```toml
-    GEMINI_API_KEY = "AIzaSyBaSEKWcNaw0jHmIiBAoXNkl_05yeBkjw8" 
-    ELEVENLABS_API_KEY = "sk_6856316767b16ec48fd6c89a72a603a5d3e06c535a94f0bc"
-    ```
-    """)
+with st.expander("⚙️ إعدادات"):
+    st.markdown("#### 🔑 API Keys — أضفها في Streamlit Secrets")
+    st.code(
+        'GEMINI_API_KEY = "مفتاحك_هنا"\nELEVENLABS_API_KEY = "مفتاحك_هنا"',
+        language="toml"
+    )
     col_a, col_b = st.columns(2)
     with col_a:
-        st.markdown("[🔑 Gemini API Key مجاني](https://aistudio.google.com/app/apikey)")
-        status_model = "✅ متصل" if model else "❌ مش متصل"
-        st.info(f"Gemini: {status_model}")
+        st.markdown("[🔑 Gemini Key مجاني](https://aistudio.google.com/app/apikey)")
+        gemini_ok = "✅ متصل" if get_gemini_key() else "❌ مش متصل"
+        st.info(f"Gemini: {gemini_ok}")
     with col_b:
-        st.markdown("[🎙️ ElevenLabs API Key](https://elevenlabs.io/app/settings/api-keys)")
-        xi_status = "✅ متصل" if get_elevenlabs_key() else "⚠️ مش متصل (بيستخدم gTTS)"
-        st.info(f"ElevenLabs: {xi_status}")
+        st.markdown("[🎙️ ElevenLabs Key](https://elevenlabs.io/app/settings/api-keys)")
+        xi_ok = "✅ متصل" if get_elevenlabs_key() else "⚠️ gTTS (احتياطي)"
+        st.info(f"ElevenLabs: {xi_ok}")
 
     st.markdown("---")
-    st.markdown("### 🎙️ اختار صوت ElevenLabs")
+    st.markdown("#### 🎙️ اختار صوت ElevenLabs")
     voices = {
-        "Adam (إنجليزي/عربي)": "pNInz6obpgDQGcFmaJgB",
-        "Arabic Male – cgSgspJ2": "cgSgspJ2msm6clMCkdW9",
-        "Aria": "9BWtsMINqrJLrRacOk9x",
-        "Custom Voice ID": "custom"
+        "Arabic Male (cgSgspJ2)": "cgSgspJ2msm6clMCkdW9",
+        "Adam":                   "pNInz6obpgDQGcFmaJgB",
+        "Aria":                   "9BWtsMINqrJLrRacOk9x",
+        "Custom Voice ID":        "custom"
     }
     selected_voice = st.selectbox("الصوت", list(voices.keys()))
     if selected_voice == "Custom Voice ID":
@@ -420,4 +418,9 @@ with st.expander("⚙️ إعدادات API Keys"):
             st.session_state["el_voice_id"] = custom_id
     else:
         st.session_state["el_voice_id"] = voices[selected_voice]
-    st.caption("💡 لو عندك صوت عربي خاص على ElevenLabs، اختار Custom واكتب الـ Voice ID")
+
+    st.markdown("---")
+    st.markdown("#### 🤖 الموديلات المتاحة (fallback تلقائي)")
+    for m in GEMINI_MODELS:
+        active = "← **نشط الآن**" if m == st.session_state.get("active_model") else ""
+        st.markdown(f"- `{m}` {active}")
