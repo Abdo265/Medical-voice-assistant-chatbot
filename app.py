@@ -1,5 +1,5 @@
 """
-🎙️ مساعد طبي صوتي - UI محسّن للموبايل والـ PC
+🎙️ مساعد طبي صوتي - ثيم أخضر تيل (Mazzbot Style)
 """
 
 import os, sys, asyncio, tempfile, base64
@@ -24,7 +24,7 @@ html, body, [class*="css"] {
 }
 
 .stApp {
-    background: #f7f8fc;
+    background: #f0faf6;
     direction: rtl;
 }
 
@@ -42,7 +42,7 @@ html, body, [class*="css"] {
 .app-header h1 {
     font-size: clamp(22px, 5vw, 32px);
     font-weight: 700;
-    color: #1a1a2e;
+    color: #065f46;
     margin: 0 0 4px;
 }
 .app-header p {
@@ -57,11 +57,11 @@ html, body, [class*="css"] {
     border-radius: 20px;
     padding: clamp(12px, 3vw, 24px);
     margin: 12px 0;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #d1fae5;
     min-height: 120px;
     max-height: 55vh;
     overflow-y: auto;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 12px rgba(27,155,117,0.06);
     scroll-behavior: smooth;
 }
 
@@ -90,8 +90,8 @@ html, body, [class*="css"] {
     font-size: 16px;
     flex-shrink: 0;
 }
-.msg-row.user  .msg-avatar { background: #dbeafe; }
-.msg-row.ai    .msg-avatar { background: #dcfce7; }
+.msg-row.user  .msg-avatar { background: #d1fae5; }
+.msg-row.ai    .msg-avatar { background: #E1F5EE; }
 
 .msg-bubble {
     padding: 10px 16px;
@@ -102,14 +102,14 @@ html, body, [class*="css"] {
     word-break: break-word;
 }
 .msg-row.user .msg-bubble {
-    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    background: linear-gradient(135deg, #1B9B75, #16856A);
     color: white;
     border-bottom-right-radius: 4px;
 }
 .msg-row.ai .msg-bubble {
-    background: #f9fafb;
+    background: #f0faf6;
     color: #1f2937;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #d1fae5;
     border-bottom-left-radius: 4px;
 }
 
@@ -121,25 +121,25 @@ html, body, [class*="css"] {
     gap: 8px;
     padding: 10px 18px;
     background: white;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #d1fae5;
     border-radius: 50px;
     font-size: 14px;
-    color: #374151;
+    color: #065f46;
     margin: 10px auto;
     width: fit-content;
     max-width: 100%;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 4px rgba(27,155,117,0.08);
 }
 
 /* ─── Voice panel ─── */
 .voice-panel {
     background: white;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #d1fae5;
     border-radius: 16px;
     padding: 16px;
     margin: 12px 0;
     text-align: center;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    box-shadow: 0 1px 6px rgba(27,155,117,0.05);
 }
 
 /* ─── Input row ─── */
@@ -147,7 +147,7 @@ html, body, [class*="css"] {
 
 div[data-testid="stTextInput"] input {
     border-radius: 50px !important;
-    border: 1.5px solid #d1d5db !important;
+    border: 1.5px solid #6ee7b7 !important;
     padding: 10px 20px !important;
     font-family: 'Cairo', sans-serif !important;
     font-size: 15px !important;
@@ -157,9 +157,9 @@ div[data-testid="stTextInput"] input {
     transition: border-color 0.2s !important;
 }
 div[data-testid="stTextInput"] input:focus {
-    border-color: #3b82f6 !important;
+    border-color: #1B9B75 !important;
     outline: none !important;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+    box-shadow: 0 0 0 3px rgba(27,155,117,0.12) !important;
 }
 
 div[data-testid="stButton"] button {
@@ -169,18 +169,11 @@ div[data-testid="stButton"] button {
     font-weight: 600 !important;
     padding: 10px 20px !important;
     transition: all 0.2s !important;
-    border: 1.5px solid #d1d5db !important;
+    border: 1.5px solid #d1fae5 !important;
 }
 div[data-testid="stButton"] button:hover {
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
-}
-
-/* ─── Action buttons ─── */
-.action-row {
-    display: flex;
-    gap: 10px;
-    margin: 4px 0 12px;
+    box-shadow: 0 4px 12px rgba(27,155,117,0.15) !important;
 }
 
 /* ─── Audio player ─── */
@@ -195,10 +188,10 @@ audio {
 .streamlit-expanderHeader {
     font-family: 'Cairo', sans-serif !important;
     font-weight: 600 !important;
-    color: #374151 !important;
+    color: #065f46 !important;
     background: white !important;
     border-radius: 12px !important;
-    border: 1px solid #e5e7eb !important;
+    border: 1px solid #d1fae5 !important;
 }
 
 /* ─── Footer ─── */
@@ -207,7 +200,7 @@ audio {
     color: #9ca3af;
     font-size: 12px;
     padding: 16px 0 24px;
-    border-top: 1px solid #f3f4f6;
+    border-top: 1px solid #d1fae5;
     margin-top: 8px;
 }
 
@@ -216,12 +209,12 @@ audio {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
+    background: #E1F5EE;
+    border: 1px solid #6ee7b7;
     border-radius: 50px;
     padding: 3px 12px;
     font-size: 11px;
-    color: #15803d;
+    color: #065f46;
     margin: 4px auto 12px;
     font-family: monospace;
 }
@@ -230,10 +223,15 @@ audio {
 .chat-container::-webkit-scrollbar { width: 4px; }
 .chat-container::-webkit-scrollbar-track { background: transparent; }
 .chat-container::-webkit-scrollbar-thumb {
-    background: #e5e7eb;
+    background: #6ee7b7;
     border-radius: 4px;
 }
-.chat-container::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+.chat-container::-webkit-scrollbar-thumb:hover { background: #34d399; }
+
+/* ─── Divider ─── */
+hr {
+    border-color: #d1fae5 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -443,9 +441,9 @@ st.markdown(
 
 # ── Voice input panel ─────────────────────
 st.components.v1.html("""
-<div style="background:white;border:1px solid #e5e7eb;border-radius:16px;
+<div style="background:white;border:1px solid #d1fae5;border-radius:16px;
             padding:16px;text-align:center;font-family:'Cairo',sans-serif;
-            box-shadow:0 1px 6px rgba(0,0,0,0.04);">
+            box-shadow:0 1px 6px rgba(27,155,117,0.05);">
 
   <p style="margin:0 0 12px;font-size:13px;color:#6b7280;direction:rtl">
     🎤 اضغط الزر، اتكلم، ثم اضغط إرسال
@@ -453,7 +451,7 @@ st.components.v1.html("""
 
   <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
     <button id="startBtn" onclick="startListening()"
-      style="background:#1d4ed8;color:white;border:none;border-radius:50px;
+      style="background:#1B9B75;color:white;border:none;border-radius:50px;
              padding:11px 26px;font-size:15px;font-family:'Cairo',sans-serif;
              font-weight:600;cursor:pointer;transition:all .2s;min-width:130px">
       🎤 ابدأ الكلام
@@ -472,7 +470,7 @@ st.components.v1.html("""
   </p>
 
   <div id="resultBox"
-    style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;
+    style="display:none;background:#f0faf6;border:1px solid #d1fae5;border-radius:12px;
            padding:10px 14px;margin-top:8px;font-size:14px;color:#1f2937;
            text-align:right;direction:rtl;min-height:40px;font-family:'Cairo',sans-serif">
   </div>
@@ -489,7 +487,7 @@ function startListening(){
   document.getElementById('resultBox').style.display='block';
   document.getElementById('resultBox').textContent='...';
   document.getElementById('statusTxt').textContent='🎤 بسمعك، اتكلم!';
-  document.getElementById('statusTxt').style.color='#16a34a';
+  document.getElementById('statusTxt').style.color='#1B9B75';
 
   rec.onresult=e=>{
     let interim="";
@@ -503,7 +501,7 @@ function startListening(){
     setUI(false);
     if(finalText.trim()){
       document.getElementById('statusTxt').textContent='✅ اتسجل! اضغط إرسال';
-      document.getElementById('statusTxt').style.color='#d97706';
+      document.getElementById('statusTxt').style.color='#F4A621';
       const inp=window.parent.document.querySelector('input[aria-label="speech_result"]');
       if(inp){
         const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
