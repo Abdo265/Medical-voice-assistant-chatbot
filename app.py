@@ -55,11 +55,11 @@ html, body, [class*="css"] {
 .chat-container {
     background: white;
     border-radius: 20px;
-    padding: clamp(12px, 3vw, 24px);
-    margin: 12px 0;
+    padding: clamp(10px, 2vw, 16px);
+    margin: 8px 0;
     border: 1px solid #d1fae5;
-    min-height: 120px;
-    max-height: 55vh;
+    min-height: 60px;
+    max-height: 50vh;
     overflow-y: auto;
     box-shadow: 0 2px 12px rgba(27,155,117,0.06);
     scroll-behavior: smooth;
@@ -67,11 +67,11 @@ html, body, [class*="css"] {
 
 .empty-state {
     text-align: center;
-    padding: 40px 20px;
+    padding: 16px 20px;
     color: #9ca3af;
     font-size: 14px;
 }
-.empty-state .empty-icon { font-size: 36px; margin-bottom: 8px; display: block; }
+.empty-state .empty-icon { font-size: 28px; margin-bottom: 4px; display: block; }
 
 /* ─── Messages ─── */
 .msg-row {
@@ -119,13 +119,13 @@ html, body, [class*="css"] {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 18px;
+    padding: 8px 18px;
     background: white;
     border: 1px solid #d1fae5;
     border-radius: 50px;
     font-size: 14px;
     color: #065f46;
-    margin: 10px auto;
+    margin: 6px auto;
     width: fit-content;
     max-width: 100%;
     box-shadow: 0 1px 4px rgba(27,155,117,0.08);
@@ -457,7 +457,7 @@ st.components.v1.html("""
       🎤 ابدأ الكلام
     </button>
     <button id="stopBtn" onclick="stopListening()" disabled
-      style="background:#dc2626;color:white;border:none;border-radius:50px;
+      style="background:#ef4444;color:white;border:none;border-radius:50px;
              padding:11px 26px;font-size:15px;font-family:'Cairo',sans-serif;
              font-weight:600;cursor:pointer;transition:all .2s;min-width:130px;opacity:.4">
       ⏹ وقف
